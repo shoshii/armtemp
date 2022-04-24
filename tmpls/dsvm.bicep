@@ -1,11 +1,11 @@
 param location string = resourceGroup().location
-param ipRange string
-param vnetIpRange string = format('10.{0}.0.0/16', ipRange)
-param subnetIpRange string = format('10.{0}.0.0/24', ipRange)
-param dnsLabelPrefix string = 'shogohoshiidnsprefix'
+param networkAddrB string = '254'
+param vnetCidr string = format('10.{0}.0.0/16', networkAddrB)
+param subnetCidr string = format('10.{0}.0.0/24', networkAddrB)
+var dnsLabelPrefix = 'shogohoshiidnsprefix'
 
 
-param pipName string = format('dsvm-pip-{0}', ipRange)
+var pipName = format('dsvm-pip-{0}', networkAddrB)
 resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
   name: pipName
   location: location
@@ -17,7 +17,7 @@ resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
   }
 }
 
-param nsgName string = 'dsvm-nsg'
+var nsgName = format('dsvm-nsg-{0}', networkAddrB)
 param clientIp string
 resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
   name: nsgName
@@ -42,60 +42,57 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2019-11-0
   }
 }
 
-param vnetName string = format('azure-network-{0}', ipRange)
+var vnetName = format('azure-network-{0}', networkAddrB)
 resource virtualNetwork 'Microsoft.Network/virtualNetworks@2019-11-01' = {
   name: vnetName
   location: location
   properties: {
     addressSpace: {
       addressPrefixes: [
-        vnetIpRange
+        vnetCidr
       ]
     }
-    subnets: [
-      {
-        name: 'default'
-        properties: {
-          addressPrefix: subnetIpRange
-          networkSecurityGroup: {
-            id: resourceId('Microsoft.Network/networkSecurityGroups', nsgName)
-          }
-        }
-      }
-    ]
   }
-  dependsOn: [
-    networkSecurityGroup
-  ]
 }
 
-param nicName string = format('nicDsvm{0}', ipRange)
+var defaultSubnetName = 'default'
+resource defaultSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+  name: defaultSubnetName
+  parent: virtualNetwork
+  properties: {
+    addressPrefix: subnetCidr
+    networkSecurityGroup: {
+      id: networkSecurityGroup.id
+    }
+  }
+}
+
+var nicName = format('nicDsvm{0}', networkAddrB)
 resource networkInterface 'Microsoft.Network/networkInterfaces@2020-11-01' = {
   name: nicName
   location: location
   properties: {
     ipConfigurations: [
       {
-        name: 'ipconfig1'
+        name: format('ipconfig{0}', networkAddrB)
         properties: {
           privateIPAllocationMethod: 'Dynamic'
           subnet: {
-            id: resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, 'default')
+            id: defaultSubnet.id
           }
           publicIPAddress: {
-            id: resourceId('Microsoft.Network/publicIPAddresses', pipName)
+            id: publicIPAddress.id
           }
         }
       }
     ]
   }
   dependsOn:[
-    publicIPAddress
     virtualNetwork
   ]
 }
 
-param storageName string = format('{0}{1}', uniqueString(resourceGroup().id), ipRange)
+var storageName = format('{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
 resource storageaccount 'Microsoft.Storage/storageAccounts@2021-02-01' = {
   name: storageName
   location: location
@@ -105,7 +102,7 @@ resource storageaccount 'Microsoft.Storage/storageAccounts@2021-02-01' = {
   }
 }
 
-param vmName string = format('dsvm-{0}', ipRange)
+var vmName = format('dsvm-{0}', networkAddrB)
 param adminUserName string
 @secure()
 @minLength(12)
@@ -153,12 +150,11 @@ resource windowsVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     diagnosticsProfile: {
       bootDiagnostics: {
         enabled: true
-        storageUri:  reference(resourceId('Microsoft.Storage/storageAccounts', storageName)).primaryEndpoints.blob
+        storageUri:  reference(storageaccount.id).primaryEndpoints.blob
       }
     }
   }
   dependsOn: [
     networkInterface
-    storageaccount
   ]
 }
