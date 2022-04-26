@@ -41,6 +41,7 @@ $ az group delete --resource-group <リソースグループ名>
 - [VPN Gatewayテンプレートサンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/demos/arm-asm-s2s/azuredeploy.json)
 - [Databricks VNet Injection サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.databricks/databricks-all-in-one-template-for-vnet-injection/main.bicep)
 - [Cosmos DB サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.documentdb/cosmosdb-sql/main.bicep)
+- [Linux インストール時スクリプトサンプル](https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/custom-script-linux)
 
 ### 基本知識
 - [Bicepとは](https://docs.microsoft.com/ja-jp/azure/azure-resource-manager/bicep/overview?tabs=bicep)

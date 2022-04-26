@@ -44,7 +44,7 @@ param containerName string = 'myContainer'
 @maxValue(1000000)
 @minValue(400)
 @description('The throughput for the container')
-param throughput int = 400
+param throughput int = 4000
 
 var consistencyPolicy = {
   Eventual: {
