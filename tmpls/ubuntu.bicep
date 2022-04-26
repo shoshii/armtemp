@@ -158,3 +158,5 @@ resource extension 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
     }
   }
 }
+
+output vmname string = ubuntuVM.name
