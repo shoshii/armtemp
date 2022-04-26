@@ -1,0 +1,9 @@
+#!/bin/sh
+
+timedatectl set-timezone Asia/Tokyo
+
+apt-get update
+apt-get upgrade
+apt install openjdk-8-jdk
+apt-get install maven
+apt-get install git
