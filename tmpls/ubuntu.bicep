@@ -96,7 +96,6 @@ var vmName = format('ubuntuvm-{0}', networkAddrB)
 param adminUserName string
 param vmSize string = 'Standard_D2s_v3'
 param adminPublicKey string
-param script_url string = ''
 resource ubuntuVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmName
   location: location
@@ -143,14 +142,13 @@ resource ubuntuVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   ]
 }
 
-var extensionName = format('ubuntuextension{0}', networkAddrB)
 resource extension 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
-  name: extensionName
+  name: format('{0}/extension', ubuntuVM.name)
   location: location
   properties: {
-    publisher: 'Microsoft.OSTCExtensions'
-    type: 'CustomScriptForLinux'
-    typeHandlerVersion: '1.4'
+    publisher: 'Microsoft.Azure.Extensions'
+    type: 'CustomScript'
+    typeHandlerVersion: '2.1'
     autoUpgradeMinorVersion: true
     settings: {
       fileUris: [
@@ -159,7 +157,4 @@ resource extension 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
       commandToExecute: 'sh deploy_ubuntu.sh'
     }
   }
-  dependsOn: [
-    ubuntuVM
-  ]
 }
