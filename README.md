@@ -26,6 +26,12 @@ $ az group create --name <リソースグループ名> --location japaneast
 $ az deployment group create --resource-group <リソースグループ名> --template-file <テンプレートファイル名> --parameters clientIp=<自分のグローバルIP>
 ```
 
+#### Ubuntu構築
+
+```
+$ az deployment group create --resource-group rg426ubu --template-file tmpls/ubuntu.bicep --parameters adminPublicKey="`cat ~/.ssh/id_rsa.pub`" clientIp=124.142.112.150 networkAddrB=30
+```
+
 ### リソースグループ削除
 
 ```

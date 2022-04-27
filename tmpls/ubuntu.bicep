@@ -160,7 +160,7 @@ resource extensionBase 'Microsoft.Compute/virtualMachines/extensions@2021-11-01'
 }
 
 // cosmos
-var accountName = format('sql-{0}', uniqueString(resourceGroup().id))
+var accountName = format('sql{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
 var primaryRegion = location
 param secondaryRegion string = 'westus'
 
