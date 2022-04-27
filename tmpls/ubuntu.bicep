@@ -1,5 +1,8 @@
 param location string = resourceGroup().location
-param networkAddrB string = '254'
+
+@description('ipv4 address class B part; ex. the vnet include resources is created like 10.<nettworkAddrB>.0.0/16')
+param networkAddrB string
+
 param vnetCidr string = format('10.{0}.0.0/16', networkAddrB)
 param subnetCidr string = format('10.{0}.0.0/24', networkAddrB)
 var dnsLabelPrefix = 'shogohoshiidnsprefix'

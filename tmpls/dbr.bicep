@@ -1,5 +1,7 @@
 param clientIp string
-param networkAddrB string = '179'
+
+@description('ipv4 address class B part; ex. the vnet include resources is created like 10.<nettworkAddrB>.0.0/16')
+param networkAddrB string
 
 @description('Specifies whether to deploy Azure Databricks workspace with secure cluster connectivity (SCC) enabled or not (No Public IP)')
 param disablePublicIp bool = false

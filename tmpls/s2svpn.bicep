@@ -1,6 +1,9 @@
 
 param location string = resourceGroup().location
-param networkAddrB string = '253'
+
+@description('ipv4 address class B part; ex. the vnet include resources is created like 10.<nettworkAddrB>.0.0/16')
+param networkAddrB string
+
 var azureNwCidr = format('10.{0}.0.0/16', networkAddrB)
 var azureNwGwCidr = format('10.{0}.0.0/24', networkAddrB)
 var azureNwSubnet2Cidr = format('10.{0}.1.0/24', networkAddrB)

@@ -1,11 +1,12 @@
 param location string = resourceGroup().location
-param networkAddrB string = '253'
+@description('ipv4 address class B part; ex. the vnet include resources is created like 10.<nettworkAddrB>.0.0/16')
+param networkAddrB string
 param vnetCidr string = format('10.{0}.0.0/16', networkAddrB)
 param subnetCidr string = format('10.{0}.0.0/24', networkAddrB)
 var dnsLabelPrefix = 'shogohoshiidnsprefix'
 
 // cosmos parameters and variables
-var accountName = format('sql-{0}', uniqueString(resourceGroup().id))
+var accountName = format('sql{0}', uniqueString(resourceGroup().id), networkAddrB)
 var primaryRegion = location
 param secondaryRegion string = 'westus'
 
