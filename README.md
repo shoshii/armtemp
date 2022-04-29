@@ -2,7 +2,7 @@
 
 Azure ARM テンプレート サンプル集です。
 
-## azure cli での使い方
+## Azure CLI での使い方
 
 ### サインイン
 ```
