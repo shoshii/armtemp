@@ -169,7 +169,7 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2020-05-01' = {
   }
 }
 
-resource vnet 'Microsoft.Network/virtualNetworks@2020-05-01' = {
+resource vnetDbrSpoke 'Microsoft.Network/virtualNetworks@2020-05-01' = {
   location: location
   name: vnetName
   properties: {
@@ -183,7 +183,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2020-05-01' = {
 
 resource dbrPublicSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
   name: publicSubnetName
-  parent: vnet
+  parent: vnetDbrSpoke
   properties: {
     addressPrefix: publicSubnetCidr
     networkSecurityGroup: {
@@ -202,7 +202,7 @@ resource dbrPublicSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' 
 
 resource dbrPrivateSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
   name: privateSubnetName
-  parent: vnet
+  parent: vnetDbrSpoke
   properties: {
     addressPrefix: privateSubnetCidr
     networkSecurityGroup: {
@@ -219,7 +219,6 @@ resource dbrPrivateSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01'
   }
 }
 
-
 resource ws 'Microsoft.Databricks/workspaces@2018-04-01' = {
   name: workspaceName
   location: location
@@ -230,7 +229,7 @@ resource ws 'Microsoft.Databricks/workspaces@2018-04-01' = {
     managedResourceGroupId: managedResourceGroup.id
     parameters: {
       customVirtualNetworkId: {
-        value: vnet.id
+        value: vnetDbrSpoke.id
       }
       customPublicSubnetName: {
         value: publicSubnetName
@@ -245,29 +244,38 @@ resource ws 'Microsoft.Databricks/workspaces@2018-04-01' = {
   }
 }
 
+var storageGen2Name = format('adlsgen2fordbr{0}', networkAddrB)
+resource storageGen2account 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageGen2Name
+  location: location
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS'
+  }
+}
 
 // VM in databricks public network
 var dnsLabelPrefix = format('shogohoshiidnsprefixdbr{0}', networkAddrB)
-var vmPipName = format('dsvm-dbr-pub-pip-{0}', networkAddrB)
+var vmPipNamePublic = format('dsvm-dbr-pub-pip-{0}', networkAddrB)
 resource vmPublicIPAddress 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
-  name: vmPipName
+  name: vmPipNamePublic
   location: location
   properties: {
     publicIPAllocationMethod: 'Dynamic'
     dnsSettings: {
-      domainNameLabel: format('{0}-{1}', dnsLabelPrefix, vmName)
+      domainNameLabel: format('{0}-{1}', dnsLabelPrefix, vmPubName)
     }
   }
 }
 
-var nicName = format('nicDsvm{0}', networkAddrB)
+var nicNamePub = format('nicDsvmPub{0}', networkAddrB)
 resource networkInterface 'Microsoft.Network/networkInterfaces@2020-11-01' = {
-  name: nicName
+  name: nicNamePub
   location: location
   properties: {
     ipConfigurations: [
       {
-        name: format('ipconfignic{0}', networkAddrB)
+        name: format('ipconfignicpubvm{0}', networkAddrB)
         properties: {
           privateIPAllocationMethod: 'Dynamic'
           subnet: {
@@ -281,13 +289,36 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2020-11-01' = {
     ]
   }
   dependsOn:[
-    vnet
+    vnetDbrSpoke
   ]
 }
 
-var storageName = format('{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
-resource storageaccount 'Microsoft.Storage/storageAccounts@2021-02-01' = {
-  name: storageName
+var nicNamePrivate = format('nicDsvmPrivate{0}', networkAddrB)
+resource networkInterfacePrivateVM 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: nicNamePrivate
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfignicprivatevm{0}', networkAddrB)
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: dbrPrivateSubnet.id
+          }
+        }
+      }
+    ]
+  }
+  dependsOn:[
+    vnetDbrSpoke
+  ]
+}
+
+
+var storageNameVMPub = format('storagedbrvmpublic{0}', networkAddrB)
+resource storageaccountVMPub 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageNameVMPub
   location: location
   kind: 'Storage'
   sku: {
@@ -295,13 +326,13 @@ resource storageaccount 'Microsoft.Storage/storageAccounts@2021-02-01' = {
   }
 }
 
-var vmName = format('dsvm-dbr-pub-{0}', networkAddrB)
+var vmPubName = format('dsvm-dbr-pub-{0}', networkAddrB)
 param adminUserName string
 @secure()
 @minLength(12)
 param adminUserPassword string
-resource windowsVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
-  name: vmName
+resource windowsPublicVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmPubName
   location: location
   properties: {
     hardwareProfile: {
@@ -343,7 +374,68 @@ resource windowsVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     diagnosticsProfile: {
       bootDiagnostics: {
         enabled: true
-        storageUri:  reference(storageaccount.id).primaryEndpoints.blob
+        storageUri:  reference(storageaccountVMPub.id).primaryEndpoints.blob
+      }
+    }
+  }
+}
+
+
+var storageNameVMPrivate = format('storagedbrvmprivate{0}', networkAddrB)
+resource storageaccountVMPrivate 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageNameVMPrivate
+  location: location
+  kind: 'Storage'
+  sku: {
+    name: 'Standard_LRS'
+  }
+}
+
+var vmPrvName = format('dsvm-dbr-private-{0}', networkAddrB)
+resource windowsPrivateVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmPrvName
+  location: location
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_D2s_v3'
+    }
+    osProfile: {
+      computerName: 'dsvm'
+      adminUsername: adminUserName
+      adminPassword: adminUserPassword
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'microsoft-dsvm'
+        offer: 'dsvm-win-2019'
+        sku: 'winserver-2019'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+        managedDisk: {
+          storageAccountType: 'Standard_LRS'
+        }
+      }
+      dataDisks: [
+        {
+          diskSizeGB: 1023
+          lun: 0
+          createOption: 'Empty'
+        }
+      ]
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterfacePrivateVM.id
+        }
+      ]
+    }
+    diagnosticsProfile: {
+      bootDiagnostics: {
+        enabled: true
+        storageUri:  reference(storageaccountVMPrivate.id).primaryEndpoints.blob
       }
     }
   }
