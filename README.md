@@ -48,6 +48,7 @@ $ az group delete --resource-group <リソースグループ名>
 - [Databricks VNet Injection サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.databricks/databricks-all-in-one-template-for-vnet-injection/main.bicep)
 - [Cosmos DB サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.documentdb/cosmosdb-sql/main.bicep)
 - [Linux インストール時スクリプトサンプル](https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/custom-script-linux)
+- [Windows インストール時スクリプトサンプル](https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/custom-script-windows)
 
 ### 基本知識
 - [Bicepとは](https://docs.microsoft.com/ja-jp/azure/azure-resource-manager/bicep/overview?tabs=bicep)
