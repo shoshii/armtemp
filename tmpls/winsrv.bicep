@@ -173,7 +173,7 @@ resource extensionBase 'Microsoft.Compute/virtualMachines/extensions@2021-11-01'
       fileUris: [
         'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_win.ps1'
       ]
-      commandToExecute: 'powershell.exe script_win.ps1'
+      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_win.ps1'
     }
   }
 }

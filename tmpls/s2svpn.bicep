@@ -136,7 +136,7 @@ resource localNetworkGateway 'Microsoft.Network/localNetworkGateways@2019-11-01'
         onpremNwCidr
       ]
     }
-    gatewayIpAddress: vmPublicIPAddressWinOnprem.properties.dnsSettings.fqdn
+    gatewayIpAddress: vmPublicIPAddressWinOnprem.properties.dnsSettings.reverseFqdn
   }
 }
 
