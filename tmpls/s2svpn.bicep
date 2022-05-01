@@ -136,7 +136,7 @@ resource localNetworkGateway 'Microsoft.Network/localNetworkGateways@2019-11-01'
         onpremNwCidr
       ]
     }
-    gatewayIpAddress: vmPublicIPAddressWinOnprem.properties.dnsSettings.reverseFqdn
+    gatewayIpAddress: vmPublicIPAddressWinOnprem.properties.ipAddress
   }
 }
 
@@ -394,6 +394,24 @@ resource windowsVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   }
 }
 
+resource extensionWinAzure 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionWinAzure', windowsVM.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Compute'
+    type: 'CustomScriptExtension'
+    typeHandlerVersion: '1.10'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_win.ps1'
+      ]
+      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_win.ps1'
+    }
+  }
+}
+
+
 // Ubuntu VM
 var pipNameUbuntu = format('ubuntuvm-azurenetwork-pip-{0}', networkAddrB)
 resource publicIPAddressUbuntu 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
@@ -503,7 +521,7 @@ resource vmPublicIPAddressWinOnprem 'Microsoft.Network/publicIPAddresses@2019-11
   name: winVmPipNameOnprem
   location: location
   properties: {
-    publicIPAllocationMethod: 'Dynamic'
+    publicIPAllocationMethod: 'Static'
     dnsSettings: {
       domainNameLabel: format('{0}-{1}', dnsLabelPrefix, vmNameWinOnprem)
     }
@@ -591,6 +609,23 @@ resource windowsVMOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
         enabled: true
         storageUri:  reference(storageaccountWinVmOnprem.id).primaryEndpoints.blob
       }
+    }
+  }
+}
+
+resource extensionWinOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionWinOnprem', windowsVMOnprem.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Compute'
+    type: 'CustomScriptExtension'
+    typeHandlerVersion: '1.10'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_win.ps1'
+      ]
+      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_win.ps1'
     }
   }
 }
