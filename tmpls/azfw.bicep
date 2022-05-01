@@ -3,10 +3,13 @@ param location string = resourceGroup().location
 @description('ipv4 address class B part; ex. the vnet include resources is created like 10.<nettworkAddrB>.0.0/16')
 param networkAddrB string
 
-param vnetCidrAzureHub string = format('10.{0}.0.0/16', networkAddrB)
-param subnetCidrFirewall string = format('10.{0}.0.0/24', networkAddrB)
-param subnetCidrAzureHubA string = format('10.{0}.1.0/24', networkAddrB)
-param subnetCidrAzureHubB string = format('10.{0}.2.0/24', networkAddrB)
+var vnetCidrAzureHub = format('10.{0}.0.0/16', networkAddrB)
+var subnetFirewall = format('10.{0}.0', networkAddrB)
+var subnetCidrFirewall = format('{0}.0/24', subnetFirewall)
+var subnetA = format('10.{0}.1', networkAddrB)
+var subnetB = format('10.{0}.2', networkAddrB)
+var subnetCidrAzureHubA = format('{0}.0/24', subnetA)
+var subnetCidrAzureHubB = format('{0}.0/24', subnetB)
 var dnsLabelPrefix = 'shogohoshiidnsprefix'
 
 var nsgName = format('winsrv-nsg-{0}', networkAddrB)
@@ -84,6 +87,25 @@ resource subnetAzureHubFirewall 'Microsoft.Network/virtualNetworks/subnets@2021-
   }
 }
 
+var nameRouteTable = format('routetable-{0}', networkAddrB)
+resource routeTable 'Microsoft.Network/routeTables@2019-11-01' = {
+  name: nameRouteTable
+  location: location
+  properties: {
+    routes: [
+      {
+        name: format('route-{0}-nextfirewall', networkAddrB)
+        properties: {
+          addressPrefix: '0.0.0.0/0'
+          nextHopType: 'VirtualAppliance'
+          nextHopIpAddress: format('{0}.4', subnetFirewall)
+        }
+      }
+    ]
+    disableBgpRoutePropagation: true
+  }
+}
+
 var subnetNameAzureHubA = 'default-azurehub-a'
 resource subnetAzureHubA 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
   name: subnetNameAzureHubA
@@ -115,8 +137,7 @@ resource ipgroupWorkload 'Microsoft.Network/ipGroups@2021-05-01' = {
   location: location
   properties: {
     ipAddresses: [
-      format('10.{0}.0.0/24', int(networkAddrB) + 1)
-      format('10.{0}.0.0/24', int(networkAddrB) + 2)
+      subnetCidrAzureHubA
     ]
   }
 }
@@ -126,8 +147,7 @@ resource ipgroupInfra 'Microsoft.Network/ipGroups@2021-05-01' = {
   location: location
   properties: {
     ipAddresses: [
-      format('10.{0}.0.0/24', int(networkAddrB) + 3)
-      format('10.{0}.0.0/24', int(networkAddrB) + 4)
+      subnetCidrAzureHubB
     ]
   }
 }
@@ -180,11 +200,69 @@ resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = {
   }
 }
 
+var dnatRuleCollectionGroupName = format('{0}/DefaultDnatRuleCollectionGroup', nameFirewallPolicy)
+resource dnatRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = {
+  name: dnatRuleCollectionGroupName
+  dependsOn: [
+    firewallPolicy
+  ]
+  properties: {
+    priority: 400
+    ruleCollections: [
+      {
+        name: 'CliToVMsRDP'
+        ruleCollectionType: 'FirewallPolicyNatRuleCollection'
+        action: {
+          type: 'DNAT'
+        }
+        rules: [
+          {
+            ruleType: 'NatRule'
+            destinationAddresses: [
+              publicIPAddressHubFirewalls[0].properties.ipAddress
+            ]
+            destinationPorts: [
+              '4000'
+            ]
+            ipProtocols: [
+              'TCP'
+            ]
+            sourceAddresses: [
+              clientIp
+            ]
+            //translatedAddress: networkInterfaceWinAzureHubA.properties.ipConfigurations[0].properties.privateIPAddress
+            translatedAddress: format('{0}.4', subnetA)
+            translatedPort: '3389'
+          }
+          {
+            ruleType: 'NatRule'
+            destinationAddresses: [
+              publicIPAddressHubFirewalls[0].properties.ipAddress
+            ]
+            destinationPorts: [
+              '4001'
+            ]
+            ipProtocols: [
+              'TCP'
+            ]
+            sourceAddresses: [
+              clientIp
+            ]
+            //translatedAddress: networkInterfaceWinAzureHubA.properties.ipConfigurations[0].properties.privateIPAddress
+            translatedAddress: format('{0}.4', subnetB)
+            translatedPort: '3389'
+          }
+        ]
+      }
+    ]
+  }
+}
+
 var nwRuleCollectionGroupName = format('{0}/DefaultNetworkRuleCollectionGroup', nameFirewallPolicy)
 resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = {
   name: nwRuleCollectionGroupName
   dependsOn: [
-    firewallPolicy
+    dnatRuleCollectionGroup
   ]
   properties: {
     priority: 200
@@ -300,6 +378,7 @@ resource firewall 'Microsoft.Network/azureFirewalls@2021-05-01' = {
     virtualNetworkAzureHub
     ipgroupInfra
     ipgroupWorkload
+    dnatRuleCollectionGroup
     nwRuleCollectionGroup
     appRuleCollectionGroup
   ]
@@ -472,7 +551,7 @@ resource networkInterfaceWinAzureHubB 'Microsoft.Network/networkInterfaces@2020-
   ]
 }
 
-var storageNameWinAzureHubB = format('winahubb{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
+var storageNameWinAzureHubB = format('wahb{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
 resource storageaccountWinAzureHubB 'Microsoft.Storage/storageAccounts@2021-02-01' = {
   name: storageNameWinAzureHubB
   location: location
@@ -482,7 +561,7 @@ resource storageaccountWinAzureHubB 'Microsoft.Storage/storageAccounts@2021-02-0
   }
 }
 
-var vmNameWinAzureHubB = format('wahb{0}', networkAddrB)
+var vmNameWinAzureHubB = format('winahubb{0}', networkAddrB)
 resource vmWinAzureHubB 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameWinAzureHubB
   location: location
@@ -532,6 +611,7 @@ resource vmWinAzureHubB 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   }
   dependsOn: [
     networkInterfaceWinAzureHubB
+    vmWinAzureHubA
   ]
 }
 
