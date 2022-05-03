@@ -334,6 +334,9 @@ param adminUserPassword string
 resource windowsPublicVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmPubName
   location: location
+  dependsOn: [
+    ws
+  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -395,6 +398,9 @@ var vmPrvName = format('dsvm-dbr-private-{0}', networkAddrB)
 resource windowsPrivateVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmPrvName
   location: location
+  dependsOn: [
+    windowsPublicVM
+  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'

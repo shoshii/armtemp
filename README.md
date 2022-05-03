@@ -50,6 +50,7 @@ $ az group delete --resource-group <リソースグループ名>
 - [Linux インストール時スクリプトサンプル](https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/custom-script-linux)
 - [Windows インストール時スクリプトサンプル](https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/custom-script-windows)
 - [Azure Firewall サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.network/azurefirewall-create-with-firewallpolicy-apprule-netrule-ipgroups/azuredeploy.json)
+- [Bastion サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.network/azure-bastion/main.bicep)
 
 ### 基本知識
 - [Bicepとは](https://docs.microsoft.com/ja-jp/azure/azure-resource-manager/bicep/overview?tabs=bicep)
