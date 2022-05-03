@@ -433,6 +433,28 @@ resource localNetworkGateway 'Microsoft.Network/localNetworkGateways@2019-11-01'
   }
 }
 
+@description('shared key used for local network gateway and onpremise router')
+@secure()
+param sharedKeyForVPN string
+resource vpnVnetConnection 'Microsoft.Network/connections@2020-11-01' = {
+  name: format('connection-vpn-local-gateway{0}', networkAddrB)
+  location: location
+  properties: {
+    virtualNetworkGateway1: {
+      id: virtualNetworkGateway.id
+      properties:{}
+    }
+    localNetworkGateway2: {
+      id: localNetworkGateway.id
+      properties:{}
+    }
+    connectionType: 'IPsec'
+    routingWeight: 10
+    sharedKey: sharedKeyForVPN
+  }
+}
+
+
 // Bastion
 var pipNameBastionHost = format('pip-bastion-host{0}', networkAddrB)
 resource publicIPAddressBastionHost 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
@@ -470,24 +492,44 @@ resource bastionHost 'Microsoft.Network/bastionHosts@2021-05-01' = {
   }
 }
 
+// vnet peering between hub and spoke
+resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkAzureSpoke.name)
+  dependsOn: [
+    virtualNetworkGateway
+  ]
+  properties: {
+    allowVirtualNetworkAccess: true
+    allowForwardedTraffic: true
+    allowGatewayTransit: true
+    useRemoteGateways: false
+    remoteVirtualNetwork: {
+      id: virtualNetworkAzureSpoke.id
+    }
+  }
+}
+resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureSpoke.name, virtualNetworkAzureSpoke.name, virtualNetworkAzureHub.name)
+  dependsOn: [
+    virtualNetworkGateway
+  ]
+  properties: {
+    allowVirtualNetworkAccess: true
+    allowForwardedTraffic: true
+    allowGatewayTransit: false
+    useRemoteGateways: true
+    remoteVirtualNetwork: {
+      id: virtualNetworkAzureHub.id
+    }
+  }
+}
+
 param adminUserName string
 @secure()
 @minLength(12)
 param adminUserPassword string
 
 // VM in spoke
-var pipNameWinAzureSpoke = format('winsrv-spoke-pip-{0}', networkAddrB)
-resource publicIPAddressWinAzureSpoke 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
-  name: pipNameWinAzureSpoke
-  location: location
-  properties: {
-    publicIPAllocationMethod: 'Dynamic'
-    dnsSettings: {
-      domainNameLabel: format('{0}-{1}', dnsLabelPrefix, vmNameWinAzureSpoke)
-    }
-  }
-}
-
 var nicNameWinAzureSpoke = format('nicwinazurespoke{0}', networkAddrB)
 resource networkInterfaceWinAzureSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
   name: nicNameWinAzureSpoke
@@ -500,9 +542,6 @@ resource networkInterfaceWinAzureSpoke 'Microsoft.Network/networkInterfaces@2020
           privateIPAllocationMethod: 'Dynamic'
           subnet: {
             id: subnetAzureSpoke.id
-          }
-          publicIPAddress: {
-            id: publicIPAddressWinAzureSpoke.id
           }
         }
       }
