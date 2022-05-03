@@ -5,7 +5,7 @@ param networkAddrB string
 
 param vnetCidr string = format('10.{0}.0.0/16', networkAddrB)
 param subnetCidr string = format('10.{0}.0.0/24', networkAddrB)
-var dnsLabelPrefix = 'shogohoshiidnsprefix'
+param dnsLabelPrefix string
 
 var pipName = format('winsrv-pip-{0}', networkAddrB)
 resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2019-11-01' = {

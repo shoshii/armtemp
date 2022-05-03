@@ -5,7 +5,7 @@ param networkAddrB string
 param adxVnetCidr string = format('10.{0}.1.0/24', networkAddrB)
 param adxSubnetCidr string = format('10.{0}.1.0/24', networkAddrB)
 
-var dnsLabelPrefix = 'shogohoshiidnsprefix'
+param dnsLabelPrefix string
 
 // ADX parameters and variables
 var clusterName = format('kusto{0}{1}', uniqueString(resourceGroup().id), networkAddrB)

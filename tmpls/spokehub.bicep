@@ -15,8 +15,7 @@ var subnetCidrAzureSpoke = format('10.{0}.0.0/24', int(networkAddrB) + 1)
 var vnetCidrOnprem = format('172.{0}.0.0/16', networkAddrB)
 var subnetCidrOnprem = format('172.{0}.0.0/24', networkAddrB)
 
-
-var dnsLabelPrefix = 'shogohoshiidnsprefix'
+param dnsLabelPrefix string
 
 var nsgName = format('common-nsg-{0}', networkAddrB)
 param clientIp string

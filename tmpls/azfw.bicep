@@ -10,7 +10,7 @@ var subnetA = format('10.{0}.1', networkAddrB)
 var subnetB = format('10.{0}.2', networkAddrB)
 var subnetCidrAzureHubA = format('{0}.0/24', subnetA)
 var subnetCidrAzureHubB = format('{0}.0/24', subnetB)
-var dnsLabelPrefix = 'shogohoshiidnsprefix'
+param dnsLabelPrefix string
 
 var nsgName = format('winsrv-nsg-{0}', networkAddrB)
 param clientIp string

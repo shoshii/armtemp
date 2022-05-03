@@ -7,7 +7,7 @@ param vnetCidrAzureHub string = format('10.{0}.0.0/16', networkAddrB)
 param subnetCidrAzureHubCentral string = format('10.{0}.0.0/24', networkAddrB)
 param subnetCidrAzureHubA string = format('10.{0}.1.0/24', networkAddrB)
 param subnetCidrAzureHubB string = format('10.{0}.2.0/24', networkAddrB)
-var dnsLabelPrefix = 'shogohoshiidnsprefix'
+param dnsLabelPrefix string
 
 var nsgName = format('winsrv-nsg-{0}', networkAddrB)
 param clientIp string

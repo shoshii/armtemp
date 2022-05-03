@@ -255,7 +255,7 @@ resource storageGen2account 'Microsoft.Storage/storageAccounts@2021-02-01' = {
 }
 
 // VM in databricks public network
-var dnsLabelPrefix = format('shogohoshiidnsprefixdbr{0}', networkAddrB)
+param dnsLabelPrefix string
 var vmPipNamePublic = format('dsvm-dbr-pub-pip-{0}', networkAddrB)
 resource vmPublicIPAddress 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
   name: vmPipNamePublic

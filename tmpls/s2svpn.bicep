@@ -141,7 +141,7 @@ resource localNetworkGateway 'Microsoft.Network/localNetworkGateways@2019-11-01'
 }
 
 // DSVM in Azure network
-var dnsLabelPrefix = format('shogohoshiidnsprefix{0}', networkAddrB)
+param dnsLabelPrefix string
 var vmPipName = format('dsvm-pip-{0}', networkAddrB)
 resource vmPublicIPAddress 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
   name: vmPipName

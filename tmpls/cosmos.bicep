@@ -3,7 +3,7 @@ param location string = resourceGroup().location
 param networkAddrB string
 param vnetCidr string = format('10.{0}.0.0/16', networkAddrB)
 param subnetCidr string = format('10.{0}.0.0/24', networkAddrB)
-var dnsLabelPrefix = 'shogohoshiidnsprefix'
+param dnsLabelPrefix string
 
 // cosmos parameters and variables
 var accountName = format('sql{0}', uniqueString(resourceGroup().id), networkAddrB)
