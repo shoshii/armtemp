@@ -101,6 +101,9 @@ resource gwSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
   properties: {
     addressPrefix: subnetCidrGateway
   }
+  dependsOn: [
+    subnetAzureHubFirewall
+  ]
 }
 
 var subnetBastionName = 'AzureBastionSubnet'
@@ -110,6 +113,9 @@ resource subnetBastion 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = 
   properties: {
     addressPrefix: subnetCidrBastion
   }
+  dependsOn: [
+    gwSubnet
+  ]
 }
 
 var subnetNameDefault = format('azure-hub-default{0}', networkAddrB)
@@ -118,7 +124,13 @@ resource subnetAzureHubDefault 'Microsoft.Network/virtualNetworks/subnets@2021-0
   name: subnetNameDefault
   properties: {
     addressPrefix: subnetCidrDefault
+    networkSecurityGroup: {
+      id: networkSecurityGroup.id
+    }
   }
+  dependsOn: [
+    subnetBastion
+  ]
 }
 
 // route tables are assumed to be attached on subnets manually
@@ -708,6 +720,8 @@ resource networkInterfaceWinAzureHub 'Microsoft.Network/networkInterfaces@2020-1
   }
   dependsOn:[
     virtualNetworkAzureHub
+    firewall
+    networkInterfaceWinAzureSpoke
   ]
 }
 
