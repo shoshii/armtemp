@@ -111,14 +111,36 @@ resource subnetBastion 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = 
   }
 }
 
-var nameRouteTableSpoke = format('routetable-spoke{0}', networkAddrB)
+// route tables are assumed to be attached on subnets manually
+// to be attached on GatewaySubnet
+var nameRouteTableOnprem = format('routetable-onprem-to-spoke{0}', networkAddrB)
+resource routeTableOnprem 'Microsoft.Network/routeTables@2019-11-01' = {
+  name: nameRouteTableOnprem
+  location: location
+  properties: {
+    routes: [
+      {
+        name: format('route-{0}-onprem-to-spoke', networkAddrB)
+        properties: {
+          addressPrefix: vnetCidrAzureSpoke
+          nextHopType: 'VirtualAppliance'
+          nextHopIpAddress: format('{0}.4', subnetFirewall)
+        }
+      }
+    ]
+    disableBgpRoutePropagation: true
+  }
+}
+
+// to be attached on SpokeSubnet
+var nameRouteTableSpoke = format('routetable-spoke-to-onprem{0}', networkAddrB)
 resource routeTableSpoke 'Microsoft.Network/routeTables@2019-11-01' = {
   name: nameRouteTableSpoke
   location: location
   properties: {
     routes: [
       {
-        name: format('route-{0}-nextfirewall', networkAddrB)
+        name: format('route-{0}-spoke-to-onpremvm', networkAddrB)
         properties: {
           addressPrefix: '0.0.0.0/0'
           nextHopType: 'VirtualAppliance'
@@ -180,6 +202,90 @@ resource subnetAzureSpoke 'Microsoft.Network/virtualNetworks/subnets@2021-05-01'
   }
 }
 
+// VPN Gataway
+var gwPipName = format('gateway-ip-{0}', networkAddrB) 
+resource gwPublicIPAddress 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
+  name: gwPipName
+  location: location
+  properties: {
+    publicIPAllocationMethod: 'Dynamic'
+    dnsSettings: {
+      domainNameLabel: format('shogohoshiis2svpn{0}', networkAddrB)
+    }
+  }
+}
+
+var azureNetworkGatewayName = format('azure-network-gateway-{0}', networkAddrB)
+resource virtualNetworkGateway 'Microsoft.Network/virtualNetworkGateways@2020-11-01' = {
+  name: azureNetworkGatewayName
+  location: location
+  dependsOn: [
+    virtualNetworkAzureHub
+  ]
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfigvngw{0}', networkAddrB)
+        properties: {
+          subnet: {
+            id: gwSubnet.id
+          }
+          publicIPAddress: {
+            id: gwPublicIPAddress.id
+          }
+          privateIPAllocationMethod: 'Dynamic'
+        }
+      }
+    ]
+    sku: {
+      name: 'VpnGw2'
+      tier: 'VpnGw2'
+    }
+    gatewayType: 'Vpn'
+    vpnType: 'RouteBased'
+    enableBgp: true
+  }
+}
+
+// local network gateway
+var onpremNetworkGatewayName = format('onprem-network-gateway-{0}', networkAddrB)
+resource localNetworkGateway 'Microsoft.Network/localNetworkGateways@2019-11-01' = {
+  name: onpremNetworkGatewayName
+  location: location
+  dependsOn: [
+    firewall
+  ]
+  properties: {
+    localNetworkAddressSpace: {
+      addressPrefixes: [
+        subnetCidrOnprem
+      ]
+    }
+    gatewayIpAddress: publicIPAddressWinOnprem.properties.ipAddress
+  }
+}
+
+@description('shared key used for local network gateway and onpremise router')
+@secure()
+param sharedKeyForVPN string
+resource vpnVnetConnection 'Microsoft.Network/connections@2020-11-01' = {
+  name: format('connection-vpn-local-gateway{0}', networkAddrB)
+  location: location
+  properties: {
+    virtualNetworkGateway1: {
+      id: virtualNetworkGateway.id
+      properties:{}
+    }
+    localNetworkGateway2: {
+      id: localNetworkGateway.id
+      properties:{}
+    }
+    connectionType: 'IPsec'
+    routingWeight: 10
+    sharedKey: sharedKeyForVPN
+  }
+}
+
 // Azure Firewall
 var ipgroupNameAzureSpoke = format('ipgroup-spoke-{0}-{1}', uniqueString(resourceGroup().id), networkAddrB)
 resource ipgroupAzureSpoke 'Microsoft.Network/ipGroups@2021-05-01' = {
@@ -188,6 +294,16 @@ resource ipgroupAzureSpoke 'Microsoft.Network/ipGroups@2021-05-01' = {
   properties: {
     ipAddresses: [
       subnetCidrAzureSpoke
+    ]
+  }
+}
+var ipgroupNameOnprem = format('ipgroup-onprem-{0}-{1}', uniqueString(resourceGroup().id), networkAddrB)
+resource ipgroupOnprem 'Microsoft.Network/ipGroups@2021-05-01' = {
+  name: ipgroupNameOnprem
+  location: location
+  properties: {
+    ipAddresses: [
+      subnetCidrOnprem
     ]
   }
 }
@@ -273,6 +389,22 @@ resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectio
             ]
             destinationPorts: [
               '123'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'http-onprem-to-spoke'
+            ipProtocols: [
+              'TCP'
+            ]
+            destinationAddresses: [
+              subnetCidrAzureSpoke
+            ]
+            sourceIpGroups: [
+              ipgroupOnprem.id
+            ]
+            destinationPorts: [
+              '80'
             ]
           }
         ]
@@ -369,97 +501,14 @@ resource firewall 'Microsoft.Network/azureFirewalls@2021-05-01' = {
   }
 }
 
-
-// VPN Gataway
-var gwPipName = format('gateway-ip-{0}', networkAddrB) 
-resource gwPublicIPAddress 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
-  name: gwPipName
-  location: location
-  properties: {
-    publicIPAllocationMethod: 'Dynamic'
-    dnsSettings: {
-      domainNameLabel: format('shogohoshiis2svpn{0}', networkAddrB)
-    }
-  }
-}
-
-var azureNetworkGatewayName = format('azure-network-gateway-{0}', networkAddrB)
-resource virtualNetworkGateway 'Microsoft.Network/virtualNetworkGateways@2020-11-01' = {
-  name: azureNetworkGatewayName
-  location: location
-  dependsOn: [
-    virtualNetworkAzureHub
-  ]
-  properties: {
-    ipConfigurations: [
-      {
-        name: format('ipconfigvngw{0}', networkAddrB)
-        properties: {
-          subnet: {
-            id: gwSubnet.id
-          }
-          publicIPAddress: {
-            id: gwPublicIPAddress.id
-          }
-          privateIPAllocationMethod: 'Dynamic'
-        }
-      }
-    ]
-    sku: {
-      name: 'VpnGw2'
-      tier: 'VpnGw2'
-    }
-    gatewayType: 'Vpn'
-    vpnType: 'RouteBased'
-    enableBgp: true
-  }
-}
-
-// local network gateway
-var onpremNetworkGatewayName = format('onprem-network-gateway-{0}', networkAddrB)
-resource localNetworkGateway 'Microsoft.Network/localNetworkGateways@2019-11-01' = {
-  name: onpremNetworkGatewayName
-  location: location
-  dependsOn: [
-    firewall
-  ]
-  properties: {
-    localNetworkAddressSpace: {
-      addressPrefixes: [
-        subnetCidrOnprem
-      ]
-    }
-    gatewayIpAddress: publicIPAddressWinOnprem.properties.ipAddress
-  }
-}
-
-@description('shared key used for local network gateway and onpremise router')
-@secure()
-param sharedKeyForVPN string
-resource vpnVnetConnection 'Microsoft.Network/connections@2020-11-01' = {
-  name: format('connection-vpn-local-gateway{0}', networkAddrB)
-  location: location
-  properties: {
-    virtualNetworkGateway1: {
-      id: virtualNetworkGateway.id
-      properties:{}
-    }
-    localNetworkGateway2: {
-      id: localNetworkGateway.id
-      properties:{}
-    }
-    connectionType: 'IPsec'
-    routingWeight: 10
-    sharedKey: sharedKeyForVPN
-  }
-}
-
-
 // Bastion
 var pipNameBastionHost = format('pip-bastion-host{0}', networkAddrB)
 resource publicIPAddressBastionHost 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
   name: pipNameBastionHost
   location: location
+  dependsOn: [
+    firewall
+  ]
   sku: {
     name: 'Standard'
   }
@@ -496,7 +545,7 @@ resource bastionHost 'Microsoft.Network/bastionHosts@2021-05-01' = {
 resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
   name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkAzureSpoke.name)
   dependsOn: [
-    virtualNetworkGateway
+    bastionHost
   ]
   properties: {
     allowVirtualNetworkAccess: true
@@ -511,7 +560,7 @@ resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@
 resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
   name: format('{0}/peering_{1}_{2}', virtualNetworkAzureSpoke.name, virtualNetworkAzureSpoke.name, virtualNetworkAzureHub.name)
   dependsOn: [
-    virtualNetworkGateway
+    bastionHost
   ]
   properties: {
     allowVirtualNetworkAccess: true
