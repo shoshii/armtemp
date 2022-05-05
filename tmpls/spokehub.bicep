@@ -815,6 +815,110 @@ resource vmDsAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   }
 }
 
+resource extensionBaseDsAzureSpoke 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionBase', vmDsAzureSpoke.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Compute'
+    type: 'CustomScriptExtension'
+    typeHandlerVersion: '1.10'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_dsvm.ps1'
+      ]
+      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_dsvm.ps1'
+    }
+  }
+}
+
+// Ubuntu VM in spoke
+var nicNameUbuntuAzureSpoke = format('nicubuntuazurespoke{0}', networkAddrB)
+resource networkInterfaceUbuntuAzureSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: nicNameUbuntuAzureSpoke
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfig-ubuntu-azurespoke{0}', networkAddrB)
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: subnetAzureSpoke.id
+          }
+        }
+      }
+    ]
+  }
+  dependsOn:[
+    virtualNetworkAzureSpoke
+    vmDsAzureSpoke
+  ]
+}
+
+param adminPublicKey string
+var vmNameUbuntuAzureSpoke = format('ubuazspoke{0}', networkAddrB)
+resource vmUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmNameUbuntuAzureSpoke
+  location: location
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_D2s_v3'
+    }
+    osProfile: {
+      computerName: vmNameUbuntuAzureSpoke
+      adminUsername: adminUserName
+      linuxConfiguration: {
+        disablePasswordAuthentication: true
+        ssh: {
+          publicKeys: [
+            {
+              path: format('/home/{0}/.ssh/authorized_keys', adminUserName)
+              keyData: adminPublicKey
+            }
+          ]
+        }
+      }
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'Canonical'
+        offer: 'UbuntuServer'
+        sku: '18_04-lts-gen2'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+      }
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterfaceUbuntuAzureSpoke.id
+        }
+      ]
+    }
+  }
+}
+
+resource extensionBaseUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionBase', vmUbuntuAzureSpoke.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Azure.Extensions'
+    type: 'CustomScript'
+    typeHandlerVersion: '2.1'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/deploy_ubuntu.sh'
+      ]
+      commandToExecute: 'sh deploy_ubuntu.sh'
+    }
+  }
+}
+
+// VMs in hub network ===================================================================
 // VM in hub
 var nicNameWinAzureHub = format('nicwinazurehub{0}', networkAddrB)
 resource networkInterfaceWinAzureHub 'Microsoft.Network/networkInterfaces@2020-11-01' = {
@@ -920,6 +1024,7 @@ resource extensionBaseAzureHub 'Microsoft.Compute/virtualMachines/extensions@202
   }
 }
 
+// VMs in onpremise ===================================================================
 // windows server VM in onpremise
 var pipNameWinOnprem = format('winsrv-onprem-pip-{0}', networkAddrB)
 resource publicIPAddressWinOnprem 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
@@ -1153,6 +1258,108 @@ resource extensionBaseDsvm 'Microsoft.Compute/virtualMachines/extensions@2021-11
         'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_win.ps1'
       ]
       commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_win.ps1'
+    }
+  }
+}
+
+resource extensionBaseDsOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionBase', vmDsOnprem.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Compute'
+    type: 'CustomScriptExtension'
+    typeHandlerVersion: '1.10'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_dsvm.ps1'
+      ]
+      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_dsvm.ps1'
+    }
+  }
+}
+
+// Ubuntu VM in onpremise
+var nicNameUbuntuOnprem = format('nicubuntuonprem{0}', networkAddrB)
+resource networkInterfaceUbuntuOnprem 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: nicNameUbuntuOnprem
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfig-ubuntu-onprem{0}', networkAddrB)
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: subnetOnprem.id
+          }
+        }
+      }
+    ]
+  }
+  dependsOn:[
+    virtualNetworkOnprem
+    vmDsOnprem
+  ]
+}
+
+var vmNameUbuntuOnprem = format('ubuonprem{0}', networkAddrB)
+resource vmUbuntuOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmNameUbuntuOnprem
+  location: location
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_D2s_v3'
+    }
+    osProfile: {
+      computerName: vmNameUbuntuOnprem
+      adminUsername: adminUserName
+      linuxConfiguration: {
+        disablePasswordAuthentication: true
+        ssh: {
+          publicKeys: [
+            {
+              path: format('/home/{0}/.ssh/authorized_keys', adminUserName)
+              keyData: adminPublicKey
+            }
+          ]
+        }
+      }
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'Canonical'
+        offer: 'UbuntuServer'
+        sku: '18_04-lts-gen2'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+      }
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterfaceUbuntuOnprem.id
+        }
+      ]
+    }
+  }
+}
+
+resource extensionBaseUbuntuOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionBase', vmUbuntuOnprem.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Azure.Extensions'
+    type: 'CustomScript'
+    typeHandlerVersion: '2.1'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/deploy_ubuntu.sh'
+      ]
+      commandToExecute: 'sh deploy_ubuntu.sh'
     }
   }
 }
