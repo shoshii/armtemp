@@ -67,6 +67,13 @@ resource defaultSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = 
     networkSecurityGroup: {
       id: networkSecurityGroup.id
     }
+    serviceEndpoints: [
+      {
+        service: 'Microsoft.AzureCosmosDB'
+      }
+    ]
+    privateEndpointNetworkPolicies: 'Disabled'
+    privateLinkServiceNetworkPolicies: 'Enabled'
   }
 }
 
@@ -246,6 +253,12 @@ resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2021-03-15' = {
     locations: locations
     databaseAccountOfferType: 'Standard'
     enableAutomaticFailover: automaticFailover
+    isVirtualNetworkFilterEnabled: true
+    virtualNetworkRules: [
+      {
+        id: defaultSubnet.id
+      }
+    ]
   }
 }
 resource sqlDb 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2021-06-15' = {

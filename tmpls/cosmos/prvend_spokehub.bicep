@@ -956,7 +956,7 @@ resource extensionBaseB 'Microsoft.Compute/virtualMachines/extensions@2021-11-01
 
 
 // cosmos
-var accountName = format('sqlsrvend{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
+var accountName = format('sql{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
 var primaryRegion = location
 param secondaryRegion string = 'westus'
 
@@ -1073,5 +1073,29 @@ resource sqlContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/contai
     options: {
       throughput: throughput
     }
+  }
+}
+
+resource privateEndpoint 'Microsoft.Network/privateEndpoints@2020-07-01' = {
+  name: format('prvendpoint-cosmos{0}', networkAddrB)
+  location: location
+  dependsOn: [
+    firewall
+  ]
+  properties: {
+    subnet: {
+      id: subnetAzureSpoke.id
+    }
+    privateLinkServiceConnections: [
+      {
+        name: format('connection-to-cosmos-sql', networkAddrB)
+        properties: {
+          privateLinkServiceId: cosmosDbAccount.id
+          groupIds: [
+            'Sql'
+          ]
+        }
+      }
+    ]
   }
 }

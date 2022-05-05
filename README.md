@@ -51,6 +51,7 @@ $ az group delete --resource-group <リソースグループ名>
 - [Windows インストール時スクリプトサンプル](https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/custom-script-windows)
 - [Azure Firewall サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.network/azurefirewall-create-with-firewallpolicy-apprule-netrule-ipgroups/azuredeploy.json)
 - [Bastion サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.network/azure-bastion/main.bicep)
+- [Cosmos プライベート エンドポイント サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.documentdb/cosmosdb-private-endpoint/main.bicep)
 
 ### 基本知識
 - [Bicepとは](https://docs.microsoft.com/ja-jp/azure/azure-resource-manager/bicep/overview?tabs=bicep)
@@ -59,3 +60,4 @@ $ az group delete --resource-group <リソースグループ名>
 - [Azure CLI でサインインする](https://docs.microsoft.com/ja-jp/cli/azure/authenticate-azure-cli)
 - [Azure CLI でサブスクリプションを管理する](https://docs.microsoft.com/ja-jp/cli/azure/manage-azure-subscriptions-azure-cli)
 - [Bicepでループ処理](https://blog.ivemo.se/Using-loops-with-Bicep/)
+- [プライベート エンドポイント ネットワーク ポリシー](https://docs.microsoft.com/ja-jp/azure/private-link/disable-private-endpoint-network-policy)
