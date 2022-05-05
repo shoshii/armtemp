@@ -631,7 +631,7 @@ param adminUserName string
 @minLength(12)
 param adminUserPassword string
 
-// VM in spoke
+// Windows Server VM in spoke
 var nicNameWinAzureSpoke = format('nicwinazurespoke{0}', networkAddrB)
 resource networkInterfaceWinAzureSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
   name: nicNameWinAzureSpoke
@@ -727,6 +727,90 @@ resource extensionBaseA 'Microsoft.Compute/virtualMachines/extensions@2021-11-01
         'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_win.ps1'
       ]
       commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_win.ps1'
+    }
+  }
+}
+
+// Data Science VM in spoke
+var nicNameDsAzureSpoke = format('nicdsvmazurespoke{0}', networkAddrB)
+resource networkInterfaceDsAzureSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: nicNameDsAzureSpoke
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfig-dsvm-azurespoke{0}', networkAddrB)
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: subnetAzureSpoke.id
+          }
+        }
+      }
+    ]
+  }
+  dependsOn:[
+    virtualNetworkAzureSpoke
+    vmWinAzureSpoke
+  ]
+}
+
+var storageNameDsAzureSpoke = format('das{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
+resource storageaccountDsAzureSpoke 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageNameDsAzureSpoke
+  location: location
+  kind: 'Storage'
+  sku: {
+    name: 'Standard_LRS'
+  }
+}
+
+var vmNameDsAzureSpoke = format('dsazspoke{0}', networkAddrB)
+resource vmDsAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmNameDsAzureSpoke
+  location: location
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_D2s_v3'
+    }
+    osProfile: {
+      computerName: vmNameDsAzureSpoke
+      adminUsername: adminUserName
+      adminPassword: adminUserPassword
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'microsoft-dsvm'
+        offer: 'dsvm-win-2019'
+        sku: 'winserver-2019'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+        managedDisk: {
+          storageAccountType: 'StandardSSD_LRS'
+        }
+      }
+      dataDisks: [
+        {
+          diskSizeGB: 1023
+          lun: 0
+          createOption: 'Empty'
+        }
+      ]
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterfaceDsAzureSpoke.id
+        }
+      ]
+    }
+    diagnosticsProfile: {
+      bootDiagnostics: {
+        enabled: true
+        storageUri:  reference(storageaccountDsAzureSpoke.id).primaryEndpoints.blob
+      }
     }
   }
 }
@@ -836,7 +920,7 @@ resource extensionBaseAzureHub 'Microsoft.Compute/virtualMachines/extensions@202
   }
 }
 
-// VM in onpremise
+// windows server VM in onpremise
 var pipNameWinOnprem = format('winsrv-onprem-pip-{0}', networkAddrB)
 resource publicIPAddressWinOnprem 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
   name: pipNameWinOnprem
@@ -954,124 +1038,121 @@ resource extensionBaseB 'Microsoft.Compute/virtualMachines/extensions@2021-11-01
   }
 }
 
-
-// cosmos
-var accountName = format('sqlsrvend{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
-var primaryRegion = location
-param secondaryRegion string = 'westus'
-
-@allowed([
-  'Eventual'
-  'ConsistentPrefix'
-  'Session'
-  'BoundedStaleness'
-  'Strong'
-])
-param defaultConsistencyLevel string = 'Session'
-
-@maxValue(2147483647)
-@minValue(10)
-@description('Max stale requests. Required for BoundedStaleness. Valid ranges, Single Region: 10 to 1000000. Multi Region: 100000 to 1000000.')
-param maxStalenessPrefix int = 100000
-
-@maxValue(86400)
-@minValue(5)
-@description('Max lag time (minutes). Required for BoundedStaleness. Valid ranges, Single Region: 5 to 84600. Multi Region: 300 to 86400.')
-param maxIntervalInSeconds int = 300
-
-@allowed([
-  true
-  false
-])
-@description('Enable automatic failover for regions')
-param automaticFailover bool = true
-
-@description('The name for the database')
-param databaseName string = 'myDatabase'
-
-@description('The name for the container')
-param containerName string = 'myContainer'
-
-@maxValue(1000000)
-@minValue(400)
-@description('The throughput for the container')
-param throughput int = 4000
-
-var consistencyPolicy = {
-  Eventual: {
-    defaultConsistencyLevel: 'Eventual'
-  }
-  ConsistentPrefix: {
-    defaultConsistencyLevel: 'ConsistentPrefix'
-  }
-  Session: {
-    defaultConsistencyLevel: 'Session'
-  }
-  BoundedStaleness: {
-    defaultConsistencyLevel: 'BoundedStaleness'
-    maxStalenessPrefix: maxStalenessPrefix
-    maxIntervalInSeconds: maxIntervalInSeconds
-  }
-  Strong: {
-    defaultConsistencyLevel: 'Strong'
-  }
-}
-
-var locations = [
-  {
-    locationName: primaryRegion
-    failoverPriority: 0
-    isZoneRedundant: false
-  }
-  {
-    locationName: secondaryRegion
-    failoverPriority: 1
-    isZoneRedundant: false
-  }
-]
-
-resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2021-03-15' = {
-  name: toLower(accountName)
+// data science machine VM in onpremise
+var pipNameDsOnprem = format('dsvm-onprem-pip-{0}', networkAddrB)
+resource publicIPAddressDsOnprem 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
+  name: pipNameDsOnprem
   location: location
-  kind: 'GlobalDocumentDB'
   properties: {
-    consistencyPolicy: consistencyPolicy[defaultConsistencyLevel]
-    locations: locations
-    databaseAccountOfferType: 'Standard'
-    enableAutomaticFailover: automaticFailover
-  }
-}
-resource sqlDb 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2021-06-15' = {
-  name: '${cosmosDbAccount.name}/${databaseName}'
-  properties: {
-    resource: {
-      id: databaseName
+    publicIPAllocationMethod: 'Static'
+    dnsSettings: {
+      domainNameLabel: format('{0}-{1}', dnsLabelPrefix, vmNameDsOnprem)
     }
   }
 }
 
-resource sqlContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2021-06-15' = {
-  name: '${sqlDb.name}/${containerName}'
+var nicNameDsOnprem = format('nicdsvmonprem{0}', networkAddrB)
+resource networkInterfaceDsOnprem 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: nicNameDsOnprem
+  location: location
   properties: {
-    resource: {
-      id: containerName
-      partitionKey: {
-        paths: [
-          '/name'
-        ]
-        kind: 'Hash'
-      }
-      indexingPolicy: {
-        indexingMode: 'consistent'
-        includedPaths: [
-          {
-            path: '/*'
+    ipConfigurations: [
+      {
+        name: format('ipconfig-dsvm-onprem{0}', networkAddrB)
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: subnetOnprem.id
           }
-        ]
+          publicIPAddress: {
+            id: publicIPAddressDsOnprem.id
+          }
+        }
+      }
+    ]
+  }
+  dependsOn:[
+    virtualNetworkOnprem
+    networkInterfaceWinOnprem
+  ]
+}
+
+var storageNameDsOnprem = format('don{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
+resource storageaccountDsOnprem 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageNameDsOnprem
+  location: location
+  kind: 'Storage'
+  sku: {
+    name: 'Standard_LRS'
+  }
+}
+
+var vmNameDsOnprem = format('dsonprem{0}', networkAddrB)
+resource vmDsOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmNameDsOnprem
+  location: location
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_D2s_v3'
+    }
+    osProfile: {
+      computerName: vmNameDsOnprem
+      adminUsername: adminUserName
+      adminPassword: adminUserPassword
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'microsoft-dsvm'
+        offer: 'dsvm-win-2019'
+        sku: 'winserver-2019'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+        managedDisk: {
+          storageAccountType: 'StandardSSD_LRS'
+        }
+      }
+      dataDisks: [
+        {
+          diskSizeGB: 1023
+          lun: 0
+          createOption: 'Empty'
+        }
+      ]
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterfaceDsOnprem.id
+        }
+      ]
+    }
+    diagnosticsProfile: {
+      bootDiagnostics: {
+        enabled: true
+        storageUri:  reference(storageaccountDsOnprem.id).primaryEndpoints.blob
       }
     }
-    options: {
-      throughput: throughput
+  }
+  dependsOn: [
+    vmWinOnprem
+  ]
+}
+
+resource extensionBaseDsvm 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionBase', vmDsOnprem.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Compute'
+    type: 'CustomScriptExtension'
+    typeHandlerVersion: '1.10'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_win.ps1'
+      ]
+      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_win.ps1'
     }
   }
 }

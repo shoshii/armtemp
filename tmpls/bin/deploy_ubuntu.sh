@@ -11,4 +11,5 @@ apt-get install maven -y
 apt-get install git -y
 
 git clone https://github.com/Azure-Samples/azure-cosmos-java-getting-started.git /home/$USER/azure-cosmos-java-getting-started/
+git clone https://github.com/Azure-Samples/azure-spring-boot-samples /home/$USER/azure-spring-boot-samples/
 chown -R $USER:$USER /home/$USER/*

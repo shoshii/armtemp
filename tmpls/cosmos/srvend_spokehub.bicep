@@ -221,6 +221,13 @@ resource subnetAzureSpoke 'Microsoft.Network/virtualNetworks/subnets@2021-05-01'
     networkSecurityGroup: {
       id: networkSecurityGroup.id
     }
+    serviceEndpoints: [
+      {
+        service: 'Microsoft.AzureCosmosDB'
+      }
+    ]
+    privateEndpointNetworkPolicies: 'Disabled'
+    privateLinkServiceNetworkPolicies: 'Enabled'
   }
 }
 
@@ -631,7 +638,8 @@ param adminUserName string
 @minLength(12)
 param adminUserPassword string
 
-// VM in spoke
+// VMs in spoke network ===================================================================
+// Windows Server VM in spoke
 var nicNameWinAzureSpoke = format('nicwinazurespoke{0}', networkAddrB)
 resource networkInterfaceWinAzureSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
   name: nicNameWinAzureSpoke
@@ -731,6 +739,194 @@ resource extensionBaseA 'Microsoft.Compute/virtualMachines/extensions@2021-11-01
   }
 }
 
+// Data Science VM in spoke
+var nicNameDsAzureSpoke = format('nicdsvmazurespoke{0}', networkAddrB)
+resource networkInterfaceDsAzureSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: nicNameDsAzureSpoke
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfig-dsvm-azurespoke{0}', networkAddrB)
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: subnetAzureSpoke.id
+          }
+        }
+      }
+    ]
+  }
+  dependsOn:[
+    virtualNetworkAzureSpoke
+    vmWinAzureSpoke
+  ]
+}
+
+var storageNameDsAzureSpoke = format('das{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
+resource storageaccountDsAzureSpoke 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageNameDsAzureSpoke
+  location: location
+  kind: 'Storage'
+  sku: {
+    name: 'Standard_LRS'
+  }
+}
+
+var vmNameDsAzureSpoke = format('dsazspoke{0}', networkAddrB)
+resource vmDsAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmNameDsAzureSpoke
+  location: location
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_D2s_v3'
+    }
+    osProfile: {
+      computerName: vmNameDsAzureSpoke
+      adminUsername: adminUserName
+      adminPassword: adminUserPassword
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'microsoft-dsvm'
+        offer: 'dsvm-win-2019'
+        sku: 'winserver-2019'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+        managedDisk: {
+          storageAccountType: 'StandardSSD_LRS'
+        }
+      }
+      dataDisks: [
+        {
+          diskSizeGB: 1023
+          lun: 0
+          createOption: 'Empty'
+        }
+      ]
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterfaceDsAzureSpoke.id
+        }
+      ]
+    }
+    diagnosticsProfile: {
+      bootDiagnostics: {
+        enabled: true
+        storageUri:  reference(storageaccountDsAzureSpoke.id).primaryEndpoints.blob
+      }
+    }
+  }
+}
+
+resource extensionBaseDsAzureSpoke 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionBase', vmDsAzureSpoke.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Compute'
+    type: 'CustomScriptExtension'
+    typeHandlerVersion: '1.10'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_dsvm.ps1'
+      ]
+      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_dsvm.ps1'
+    }
+  }
+}
+
+// Ubuntu VM in spoke
+var nicNameUbuntuAzureSpoke = format('nicubuntuazurespoke{0}', networkAddrB)
+resource networkInterfaceUbuntuAzureSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: nicNameUbuntuAzureSpoke
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfig-ubuntu-azurespoke{0}', networkAddrB)
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: subnetAzureSpoke.id
+          }
+        }
+      }
+    ]
+  }
+  dependsOn:[
+    virtualNetworkAzureSpoke
+    vmDsAzureSpoke
+  ]
+}
+
+param adminPublicKey string
+var vmNameUbuntuAzureSpoke = format('ubuazspoke{0}', networkAddrB)
+resource vmUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmNameUbuntuAzureSpoke
+  location: location
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_D2s_v3'
+    }
+    osProfile: {
+      computerName: vmNameUbuntuAzureSpoke
+      adminUsername: adminUserName
+      linuxConfiguration: {
+        disablePasswordAuthentication: true
+        ssh: {
+          publicKeys: [
+            {
+              path: format('/home/{0}/.ssh/authorized_keys', adminUserName)
+              keyData: adminPublicKey
+            }
+          ]
+        }
+      }
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'Canonical'
+        offer: 'UbuntuServer'
+        sku: '18_04-lts-gen2'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+      }
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterfaceUbuntuAzureSpoke.id
+        }
+      ]
+    }
+  }
+}
+
+resource extensionBaseUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionBase', vmUbuntuAzureSpoke.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Azure.Extensions'
+    type: 'CustomScript'
+    typeHandlerVersion: '2.1'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/deploy_ubuntu.sh'
+      ]
+      commandToExecute: 'sh deploy_ubuntu.sh'
+    }
+  }
+}
+
+// VMs in hub network ===================================================================
 // VM in hub
 var nicNameWinAzureHub = format('nicwinazurehub{0}', networkAddrB)
 resource networkInterfaceWinAzureHub 'Microsoft.Network/networkInterfaces@2020-11-01' = {
@@ -836,7 +1032,8 @@ resource extensionBaseAzureHub 'Microsoft.Compute/virtualMachines/extensions@202
   }
 }
 
-// VM in onpremise
+// VMs in onpremise ===================================================================
+// windows server VM in onpremise
 var pipNameWinOnprem = format('winsrv-onprem-pip-{0}', networkAddrB)
 resource publicIPAddressWinOnprem 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
   name: pipNameWinOnprem
@@ -954,6 +1151,210 @@ resource extensionBaseB 'Microsoft.Compute/virtualMachines/extensions@2021-11-01
   }
 }
 
+// data science machine VM in onpremise
+var pipNameDsOnprem = format('dsvm-onprem-pip-{0}', networkAddrB)
+resource publicIPAddressDsOnprem 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
+  name: pipNameDsOnprem
+  location: location
+  properties: {
+    publicIPAllocationMethod: 'Static'
+    dnsSettings: {
+      domainNameLabel: format('{0}-{1}', dnsLabelPrefix, vmNameDsOnprem)
+    }
+  }
+}
+
+var nicNameDsOnprem = format('nicdsvmonprem{0}', networkAddrB)
+resource networkInterfaceDsOnprem 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: nicNameDsOnprem
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfig-dsvm-onprem{0}', networkAddrB)
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: subnetOnprem.id
+          }
+          publicIPAddress: {
+            id: publicIPAddressDsOnprem.id
+          }
+        }
+      }
+    ]
+  }
+  dependsOn:[
+    virtualNetworkOnprem
+    networkInterfaceWinOnprem
+  ]
+}
+
+var storageNameDsOnprem = format('don{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
+resource storageaccountDsOnprem 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageNameDsOnprem
+  location: location
+  kind: 'Storage'
+  sku: {
+    name: 'Standard_LRS'
+  }
+}
+
+var vmNameDsOnprem = format('dsonprem{0}', networkAddrB)
+resource vmDsOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmNameDsOnprem
+  location: location
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_D2s_v3'
+    }
+    osProfile: {
+      computerName: vmNameDsOnprem
+      adminUsername: adminUserName
+      adminPassword: adminUserPassword
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'microsoft-dsvm'
+        offer: 'dsvm-win-2019'
+        sku: 'winserver-2019'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+        managedDisk: {
+          storageAccountType: 'StandardSSD_LRS'
+        }
+      }
+      dataDisks: [
+        {
+          diskSizeGB: 1023
+          lun: 0
+          createOption: 'Empty'
+        }
+      ]
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterfaceDsOnprem.id
+        }
+      ]
+    }
+    diagnosticsProfile: {
+      bootDiagnostics: {
+        enabled: true
+        storageUri:  reference(storageaccountDsOnprem.id).primaryEndpoints.blob
+      }
+    }
+  }
+  dependsOn: [
+    vmWinOnprem
+  ]
+}
+
+resource extensionBaseDsOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionBase', vmDsOnprem.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Compute'
+    type: 'CustomScriptExtension'
+    typeHandlerVersion: '1.10'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_dsvm.ps1'
+      ]
+      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_dsvm.ps1'
+    }
+  }
+}
+
+// Ubuntu VM in onpremise
+var nicNameUbuntuOnprem = format('nicubuntuonprem{0}', networkAddrB)
+resource networkInterfaceUbuntuOnprem 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: nicNameUbuntuOnprem
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfig-ubuntu-onprem{0}', networkAddrB)
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: subnetOnprem.id
+          }
+        }
+      }
+    ]
+  }
+  dependsOn:[
+    virtualNetworkOnprem
+    vmDsOnprem
+  ]
+}
+
+var vmNameUbuntuOnprem = format('ubuonprem{0}', networkAddrB)
+resource vmUbuntuOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmNameUbuntuOnprem
+  location: location
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_D2s_v3'
+    }
+    osProfile: {
+      computerName: vmNameUbuntuOnprem
+      adminUsername: adminUserName
+      linuxConfiguration: {
+        disablePasswordAuthentication: true
+        ssh: {
+          publicKeys: [
+            {
+              path: format('/home/{0}/.ssh/authorized_keys', adminUserName)
+              keyData: adminPublicKey
+            }
+          ]
+        }
+      }
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'Canonical'
+        offer: 'UbuntuServer'
+        sku: '18_04-lts-gen2'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+      }
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterfaceUbuntuOnprem.id
+        }
+      ]
+    }
+  }
+}
+
+resource extensionBaseUbuntuOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionBase', vmUbuntuOnprem.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Azure.Extensions'
+    type: 'CustomScript'
+    typeHandlerVersion: '2.1'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/deploy_ubuntu.sh'
+      ]
+      commandToExecute: 'sh deploy_ubuntu.sh'
+    }
+  }
+}
+
 
 // cosmos
 var accountName = format('sql{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
@@ -1039,6 +1440,12 @@ resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2021-03-15' = {
     locations: locations
     databaseAccountOfferType: 'Standard'
     enableAutomaticFailover: automaticFailover
+    isVirtualNetworkFilterEnabled: true
+    virtualNetworkRules: [
+      {
+        id: subnetAzureSpoke.id
+      }
+    ]
   }
 }
 resource sqlDb 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2021-06-15' = {
