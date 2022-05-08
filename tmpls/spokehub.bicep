@@ -827,7 +827,7 @@ resource extensionBaseDsAzureSpoke 'Microsoft.Compute/virtualMachines/extensions
       fileUris: [
         'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_dsvm.ps1'
       ]
-      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_dsvm.ps1'
+      commandToExecute: format('powershell.exe -ExecutionPolicy Unrestricted -File script_dsvm.ps1 {0}', adminUserName)
     }
   }
 }
@@ -1257,7 +1257,7 @@ resource extensionBaseDsOnprem 'Microsoft.Compute/virtualMachines/extensions@202
       fileUris: [
         'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_dsvm.ps1'
       ]
-      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_dsvm.ps1'
+      commandToExecute: format('powershell.exe -ExecutionPolicy Unrestricted -File script_dsvm.ps1 {0}', adminUserName)
     }
   }
 }
