@@ -36,7 +36,7 @@ param vnetCidrAdx string = format('10.{0}.0.0/16', int(networkAddrB) + 2)
 param adxVnetName string = format('dataexlorer-vnet-{0}', networkAddrB)
 
 @description('The name of the Azure Data Explorer Cluster to create.')
-param clusterName string = format('vnetinj{0}', networkAddrB)
+param clusterName string = format('vnetinj{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
 
 // adx -------------------------------------------------------------------------------
 resource networkSecurityGroupAdx 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
