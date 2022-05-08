@@ -52,6 +52,7 @@ $ az group delete --resource-group <リソースグループ名>
 - [Azure Firewall サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.network/azurefirewall-create-with-firewallpolicy-apprule-netrule-ipgroups/azuredeploy.json)
 - [Bastion サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.network/azure-bastion/main.bicep)
 - [Cosmos プライベート エンドポイント サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.documentdb/cosmosdb-private-endpoint/main.bicep)
+- [SQL Server Managed Instance サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/demos/azure-sql-managed-instance/azuredeploy.json)
 
 ### 基本知識
 - [Bicepとは](https://docs.microsoft.com/ja-jp/azure/azure-resource-manager/bicep/overview?tabs=bicep)
