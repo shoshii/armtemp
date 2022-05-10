@@ -21,58 +21,31 @@ param dnsLabelPrefix string
 var nsgName = format('common-nsg-{0}', networkAddrB)
 param clientIp string
 
-// dbr params ------------------------------------------------------------------------------------------------
-@description('Specifies whether to deploy Azure Databricks workspace with secure cluster connectivity (SCC) enabled or not (No Public IP)')
-param disablePublicIp bool = true
-
-@description('The name of the network security group to create.')
-var nsgNameDbr = format('databricks-nsg-{0}', networkAddrB)
-
-@description('The pricing tier of workspace.')
-@allowed([
-  'trial'
-  'standard'
-  'premium'
-])
-param pricingTier string = 'premium'
-
-@description('CIDR range for the private subnet.')
-param subnetCidrDbrPrivate string = format('10.{0}.0.0/18', int(networkAddrB) + 2)
-
-@description('The name of the private subnet to create.')
-param dbrPrivateSubnetName string = 'private-subnet'
+// hdi params ------------------------------------------------------------------------------------------------
 
 @description('CIDR range for the public subnet..')
-param subnetCidrDbrPublic string = format('10.{0}.64.0/18', int(networkAddrB) + 2)
+param subnetCidrHdi string = format('10.{0}.0.0/20', int(networkAddrB) + 2)
 
 @description('The name of the public subnet to create.')
-param dbrPublicSubnetName string = 'public-subnet'
+param hdiPublicSubnetName string = 'public-subnet'
 
 @description('CIDR range for the vnet.')
-param vnetCidrDbr string = format('10.{0}.0.0/16', int(networkAddrB) + 2)
+param vnetCidrHdi string = format('10.{0}.0.0/16', int(networkAddrB) + 2)
 
 @description('The name of the virtual network to create.')
-var dbrVnetName = format('databricks-vnet-{0}', networkAddrB)
+param hdiVnetName string = format('hdinsight-vnet-{0}', networkAddrB)
 
-@description('The name of the Azure Databricks workspace to create.')
-param workspaceName string
+@description('The name of the Azure Data Explorer Cluster to create.')
+param clusterName string = format('vnetinj{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
 
-// dbr -------------------------------------------------------------------------------
-
-var managedResourceGroupName = 'databricks-rg-${workspaceName}-${uniqueString(workspaceName, resourceGroup().id)}'
-
-resource managedResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
-  scope: subscription()
-  name: managedResourceGroupName
-}
-
-resource nsgDbr 'Microsoft.Network/networkSecurityGroups@2020-05-01' = {
+// hdi -------------------------------------------------------------------------------
+resource networkSecurityGroupHdi 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
+  name: format('nsg-hdi{0}', networkAddrB)
   location: location
-  name: nsgNameDbr
   properties: {
     securityRules: [
       {
-        name: 'Microsoft.Databricks-workspaces_UseOnly_databricks-worker-to-worker-inbound'
+        name: 'hdi-internal-inbound'
         properties: {
           description: 'Required for worker nodes communication within a cluster.'
           protocol: '*'
@@ -86,73 +59,36 @@ resource nsgDbr 'Microsoft.Network/networkSecurityGroups@2020-05-01' = {
         }
       }
       {
-        name: 'Microsoft.Databricks-workspaces_UseOnly_databricks-worker-to-databricks-webapp'
+        name: 'hdi-management-outbound'
         properties: {
-          description: 'Required for workers communication with Databricks Webapp.'
+          description: 'allow access to HDI management.'
           protocol: 'Tcp'
           sourcePortRange: '*'
-          destinationPortRange: '443'
+          destinationPortRanges: [
+            '443'
+          ]
           sourceAddressPrefix: 'VirtualNetwork'
-          destinationAddressPrefix: 'AzureDatabricks'
+          destinationAddressPrefix: 'HDInsight'
           access: 'Allow'
-          priority: 100
+          priority: 110
           direction: 'Outbound'
         }
       }
       {
-        name: 'Microsoft.Databricks-workspaces_UseOnly_databricks-worker-to-sql'
+        name: 'allowHttpsfromClient'
         properties: {
-          description: 'Required for workers communication with Azure SQL services.'
+          description: 'allow Https from client'
           protocol: 'Tcp'
           sourcePortRange: '*'
-          destinationPortRange: '3306'
-          sourceAddressPrefix: 'VirtualNetwork'
-          destinationAddressPrefix: 'Sql'
+          destinationPortRanges: [
+            '443'
+            '80'
+          ]
+          sourceAddressPrefix: clientIp
+          destinationAddressPrefix: '*'
           access: 'Allow'
-          priority: 101
-          direction: 'Outbound'
-        }
-      }
-      {
-        name: 'Microsoft.Databricks-workspaces_UseOnly_databricks-worker-to-storage'
-        properties: {
-          description: 'Required for workers communication with Azure Storage services.'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          destinationPortRange: '443'
-          sourceAddressPrefix: 'VirtualNetwork'
-          destinationAddressPrefix: 'Storage'
-          access: 'Allow'
-          priority: 102
-          direction: 'Outbound'
-        }
-      }
-      {
-        name: 'Microsoft.Databricks-workspaces_UseOnly_databricks-worker-to-worker-outbound'
-        properties: {
-          description: 'Required for worker nodes communication within a cluster.'
-          protocol: '*'
-          sourcePortRange: '*'
-          destinationPortRange: '*'
-          sourceAddressPrefix: 'VirtualNetwork'
-          destinationAddressPrefix: 'VirtualNetwork'
-          access: 'Allow'
-          priority: 103
-          direction: 'Outbound'
-        }
-      }
-      {
-        name: 'Microsoft.Databricks-workspaces_UseOnly_databricks-worker-to-eventhub'
-        properties: {
-          description: 'Required for worker communication with Azure Eventhub services.'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          destinationPortRange: '9093'
-          sourceAddressPrefix: 'VirtualNetwork'
-          destinationAddressPrefix: 'EventHub'
-          access: 'Allow'
-          priority: 104
-          direction: 'Outbound'
+          priority: 300
+          direction: 'Inbound'
         }
       }
       {
@@ -165,7 +101,7 @@ resource nsgDbr 'Microsoft.Network/networkSecurityGroups@2020-05-01' = {
           sourceAddressPrefix: clientIp
           destinationAddressPrefix: '*'
           access: 'Allow'
-          priority: 300
+          priority: 310
           direction: 'Inbound'
         }
       }
@@ -179,101 +115,63 @@ resource nsgDbr 'Microsoft.Network/networkSecurityGroups@2020-05-01' = {
           sourceAddressPrefix: clientIp
           destinationAddressPrefix: '*'
           access: 'Allow'
-          priority: 310
+          priority: 320
           direction: 'Inbound'
         }
       }
     ]
   }
 }
-
-resource virtualNetworkDbrSpoke 'Microsoft.Network/virtualNetworks@2020-05-01' = {
+resource virtualNetworkHdiSpoke 'Microsoft.Network/virtualNetworks@2020-05-01' = {
   location: location
-  name: dbrVnetName
+  name: hdiVnetName
   properties: {
     addressSpace: {
       addressPrefixes: [
-        vnetCidrDbr
-      ]
-    }
-    dhcpOptions: {
-      dnsServers: [
-        format('{0}.4', subnetFirewall)
+        vnetCidrHdi
       ]
     }
   }
 }
 
-resource dbrPublicSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
-  name: dbrPublicSubnetName
-  parent: virtualNetworkDbrSpoke
+resource hdiPublicSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+  name: hdiPublicSubnetName
+  parent: virtualNetworkHdiSpoke
   properties: {
-    addressPrefix: subnetCidrDbrPublic
+    addressPrefix: subnetCidrHdi
     networkSecurityGroup: {
-      id: nsgDbr.id
+      id: networkSecurityGroupHdi.id
     }
     delegations: [
       {
-        name: 'databricks-del-public'
+        name: format('hdinsight-del-public{0}', networkAddrB)
         properties: {
-          serviceName: 'Microsoft.Databricks/workspaces'
+          serviceName: 'Microsoft.Kusto/clusters'
         }
       }
     ]
   }
 }
 
-resource dbrPrivateSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
-  name: dbrPrivateSubnetName
-  parent: virtualNetworkDbrSpoke
+resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
+  name: clusterName
+  location: location
   properties: {
-    addressPrefix: subnetCidrDbrPrivate
-    networkSecurityGroup: {
-      id: nsgDbr.id
-    }
-    delegations: [
-      {
-        name: format('databricks-del-private{0}', networkAddrB)
-        properties: {
-          serviceName: 'Microsoft.Databricks/workspaces'
+    clusterVersion: '4.0'
+    osType: 'Linux'
+    tier: 'Standard'
+    clusterDefinition: {
+      kind: 'hadoop'
+      configurations: {
+        gateway: {
+          restAuthCredential: {
+            isEnabled: true
+            username: adminUserName
+            password: adminUserPassword
+          }
         }
       }
-    ]
-  }
-}
-
-resource ws 'Microsoft.Databricks/workspaces@2018-04-01' = {
-  name: workspaceName
-  location: location
-  sku: {
-    name: pricingTier
-  }
-  properties: {
-    managedResourceGroupId: managedResourceGroup.id
-    parameters: {
-      customVirtualNetworkId: {
-        value: virtualNetworkDbrSpoke.id
-      }
-      customPublicSubnetName: {
-        value: dbrPublicSubnetName
-      }
-      customPrivateSubnetName: {
-        value: dbrPrivateSubnetName
-      }
-      enableNoPublicIp: {
-        value: disablePublicIp
-      }
     }
-  }
-}
-
-var storageGen2Name = format('adlsgen2fordbr{0}', networkAddrB)
-resource storageGen2account 'Microsoft.Storage/storageAccounts@2021-02-01' = {
-  name: storageGen2Name
-  location: location
-  kind: 'StorageV2'
-  sku: {
-    name: 'Standard_LRS'
   }
 }
 
@@ -433,26 +331,6 @@ resource routeTableSpoke 'Microsoft.Network/routeTables@2019-11-01' = {
   }
 }
 
-// to be attached on dbr public/private subnets
-var nameRouteTableDbrSpoke = format('routetable-dbr-to-internet{0}', networkAddrB)
-resource routeTableDbrSpoke 'Microsoft.Network/routeTables@2019-11-01' = {
-  name: nameRouteTableDbrSpoke
-  location: location
-  properties: {
-    routes: [
-      {
-        name: format('route-{0}-dbr-to-internet', networkAddrB)
-        properties: {
-          addressPrefix: '0.0.0.0/0'
-          nextHopType: 'VirtualAppliance'
-          nextHopIpAddress: format('{0}.4', subnetFirewall)
-        }
-      }
-    ]
-    disableBgpRoutePropagation: true
-  }
-}
-
 var vnetNameOnprem = format('onprem-net-{0}', networkAddrB)
 resource virtualNetworkOnprem 'Microsoft.Network/virtualNetworks@2019-11-01' = {
   name: vnetNameOnprem
@@ -502,7 +380,6 @@ resource subnetAzureSpoke 'Microsoft.Network/virtualNetworks/subnets@2021-05-01'
     }
   }
 }
-
 
 // VPN Gataway
 var gwPipName = format('gateway-ip-{0}', networkAddrB) 
@@ -621,24 +498,13 @@ resource ipgroupOnprem 'Microsoft.Network/ipGroups@2021-05-01' = {
   }
 }
 
-var ipgroupNameDbrPublic = format('ipgroup-dbr-pub-{0}-{1}', uniqueString(resourceGroup().id), networkAddrB)
-resource ipgroupDbrPublic 'Microsoft.Network/ipGroups@2021-05-01' = {
-  name: ipgroupNameDbrPublic
+var ipgroupNameHdi = format('ipgroup-hdi-pub-{0}-{1}', uniqueString(resourceGroup().id), networkAddrB)
+resource ipgroupHdi 'Microsoft.Network/ipGroups@2021-05-01' = {
+  name: ipgroupNameHdi
   location: location
   properties: {
     ipAddresses: [
-      subnetCidrDbrPublic
-    ]
-  }
-}
-
-var ipgroupNameDbrPrivate = format('ipgroup-dbr-priv-{0}-{1}', uniqueString(resourceGroup().id), networkAddrB)
-resource ipgroupDbrPrivate 'Microsoft.Network/ipGroups@2021-05-01' = {
-  name: ipgroupNameDbrPrivate
-  location: location
-  properties: {
-    ipAddresses: [
-      subnetCidrDbrPrivate
+      subnetCidrHdi
     ]
   }
 }
@@ -689,19 +555,10 @@ resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = {
   ]
   location: location
   properties: {
-    dnsSettings: {
-      enableProxy: true
-      servers: [
-        format('{0}.4', subnetFirewall)
-      ]
-    }
     threatIntelMode: 'Alert'
   }
 }
 
-param metastoreFqdn string
-param extendedInfrastructureIp string
-param webappIp string
 var nwRuleCollectionGroupName = format('{0}/DefaultNetworkRuleCollectionGroup', nameFirewallPolicy)
 resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = {
   name: nwRuleCollectionGroupName
@@ -773,77 +630,10 @@ resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectio
           }
         ]
       }
-      {
-        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
-        action: {
-          type: 'Allow'
-        }
-        name: 'dbr-nrc'
-        priority: 220
-        rules: [
-          {
-            ruleType: 'NetworkRule'
-            name: 'webapp'
-            ipProtocols: [
-              'TCP'
-            ]
-            destinationAddresses: [
-              webappIp
-            ]
-            sourceIpGroups: [
-              ipgroupDbrPrivate.id
-              ipgroupDbrPublic.id
-            ]
-            destinationPorts: [
-              '443'
-            ]
-          }
-          {
-            ruleType: 'NetworkRule'
-            name: 'metastore'
-            ipProtocols: [
-              'TCP'
-            ]
-            destinationAddresses: [
-              metastoreFqdn
-            ]
-            sourceIpGroups: [
-              ipgroupDbrPrivate.id
-              ipgroupDbrPublic.id
-            ]
-            destinationPorts: [
-              '3306'
-            ]
-          }
-          {
-            ruleType: 'NetworkRule'
-            name: 'Extended infrastructure'
-            ipProtocols: [
-              'TCP'
-            ]
-            destinationAddresses: [
-              extendedInfrastructureIp
-            ]
-            sourceIpGroups: [
-              ipgroupDbrPrivate.id
-              ipgroupDbrPublic.id
-            ]
-            destinationPorts: [
-              '443'
-            ]
-          }
-        ]
-      }
     ]
   }
 }
 
-param sccRelayFqdn string = 'tunnel.japaneast.azuredatabricks.net'
-param artifactBlobStoragePrimaryFqdn string
-param artifactBlobStorageSecondaryFqdn string
-param logBlobStorageFqdn string
-param eventHubEndpointFqdn string
-param dbfsEndpointFqdn string
 var appRuleCollectionGroupName = format('{0}/DefaultApplicationRuleCollectionGroup', nameFirewallPolicy)
 resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = {
   name: appRuleCollectionGroupName
@@ -853,125 +643,6 @@ resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollecti
   properties: {
     priority: 300
     ruleCollections: [
-      {
-        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
-        action: {
-          type: 'Allow'
-        }
-        name: 'dbr-rules-arc'
-        priority: 310
-        rules: [
-          {
-            ruleType: 'ApplicationRule'
-            name: 'SCC relay'
-            protocols: [
-              {
-                protocolType: 'Https'
-                port: 443
-              }
-            ]
-            targetFqdns: [
-              sccRelayFqdn
-            ]
-            terminateTLS: false
-            sourceIpGroups: [
-              ipgroupDbrPrivate.id
-              ipgroupDbrPublic.id
-            ]
-          }
-          {
-            ruleType: 'ApplicationRule'
-            name: 'Artifact Blob Storage Primary'
-            protocols: [
-              {
-                protocolType: 'Https'
-                port: 443
-              }
-            ]
-            targetFqdns: [
-              artifactBlobStoragePrimaryFqdn
-            ]
-            terminateTLS: false
-            sourceIpGroups: [
-              ipgroupDbrPrivate.id
-              ipgroupDbrPublic.id
-            ]
-          }
-          {
-            ruleType: 'ApplicationRule'
-            name: 'Artifact Blob Storage Secondary'
-            protocols: [
-              {
-                protocolType: 'Https'
-                port: 443
-              }
-            ]
-            targetFqdns: [
-              artifactBlobStorageSecondaryFqdn
-            ]
-            terminateTLS: false
-            sourceIpGroups: [
-              ipgroupDbrPrivate.id
-              ipgroupDbrPublic.id
-            ]
-          }
-          {
-            ruleType: 'ApplicationRule'
-            name: 'Log Blob storage'
-            protocols: [
-              {
-                protocolType: 'Https'
-                port: 443
-              }
-            ]
-            targetFqdns: [
-              logBlobStorageFqdn
-            ]
-            terminateTLS: false
-            sourceIpGroups: [
-              ipgroupDbrPrivate.id
-              ipgroupDbrPublic.id
-            ]
-          }
-          {
-            ruleType: 'ApplicationRule'
-            name: 'Event Hub endpoint'
-            protocols: [
-              {
-                protocolType: 'Https'
-                port: 443
-              }
-            ]
-            targetFqdns: [
-              eventHubEndpointFqdn
-            ]
-            terminateTLS: false
-            sourceIpGroups: [
-              ipgroupDbrPrivate.id
-              ipgroupDbrPublic.id
-            ]
-          }
-          {
-            ruleType: 'ApplicationRule'
-            name: 'DBFS Storage'
-            description: 'Please replace the FQDN to precise FQDN of the DBFS Storage Account in MGR'
-            protocols: [
-              {
-                protocolType: 'Https'
-                port: 443
-              }
-            ]
-            targetFqdns: [
-              dbfsEndpointFqdn
-            ]
-            terminateTLS: false
-            sourceIpGroups: [
-              ipgroupDbrPrivate.id
-              ipgroupDbrPublic.id
-            ]
-          }
-        ]
-      }
       {
         ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
         action: {
@@ -1123,9 +794,9 @@ resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@20
   }
 }
 
-// vnet peering between hub and dbr spoke
-resource peeringDbrSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
-  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkDbrSpoke.name)
+// vnet peering between hub and hdi spoke
+resource peeringHdiSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkHdiSpoke.name)
   dependsOn: [
     peeringHub
   ]
@@ -1135,12 +806,12 @@ resource peeringDbrSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerin
     allowGatewayTransit: true
     useRemoteGateways: false
     remoteVirtualNetwork: {
-      id: virtualNetworkDbrSpoke.id
+      id: virtualNetworkHdiSpoke.id
     }
   }
 }
-resource peeringHubDbr 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
-  name: format('{0}/peering_{1}_{2}', virtualNetworkDbrSpoke.name, virtualNetworkDbrSpoke.name, virtualNetworkAzureHub.name)
+resource peeringHubHdi 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkHdiSpoke.name, virtualNetworkHdiSpoke.name, virtualNetworkAzureHub.name)
   dependsOn: [
     peeringHub
   ]

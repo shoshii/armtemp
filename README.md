@@ -38,6 +38,13 @@ $ az deployment group create --resource-group rg426ubu --template-file tmpls/ubu
 $ az group delete --resource-group <リソースグループ名>
 ```
 
+### ADX クラスター依存関係取得
+
+```
+$ Set-ExecutionPolicy Unrestricted -Scope Process
+$ misc/get_adx_dependencies.ps1 <subscription id> <adx cluster name> <resource group name>
+```
+
 ## 参考資料
 
 ### サンプル集
@@ -53,6 +60,7 @@ $ az group delete --resource-group <リソースグループ名>
 - [Bastion サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.network/azure-bastion/main.bicep)
 - [Cosmos プライベート エンドポイント サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.documentdb/cosmosdb-private-endpoint/main.bicep)
 - [SQL Server Managed Instance サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/demos/azure-sql-managed-instance/azuredeploy.json)
+- [HDInsight サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.hdinsight/hdinsight-datalake-store-azure-storage/azuredeploy.json)
 
 ### 基本知識
 - [Bicepとは](https://docs.microsoft.com/ja-jp/azure/azure-resource-manager/bicep/overview?tabs=bicep)

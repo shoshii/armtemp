@@ -36,7 +36,7 @@ param vnetCidrAdx string = format('10.{0}.0.0/16', int(networkAddrB) + 2)
 param adxVnetName string = format('dataexlorer-vnet-{0}', networkAddrB)
 
 @description('The name of the Azure Data Explorer Cluster to create.')
-param clusterName string = format('vnetinj{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
+param clusterName string = format('vnet{0}{1}', networkAddrB, uniqueString(resourceGroup().id))
 
 // adx -------------------------------------------------------------------------------
 resource networkSecurityGroupAdx 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
@@ -238,10 +238,26 @@ resource networkSecurityGroupAdx 'Microsoft.Network/networkSecurityGroups@2019-1
     ]
   }
 }
+
+// to be attached adx subnet
 resource routeTableAdx 'Microsoft.Network/routeTables@2019-11-01' = {
-  name: format('routetable-adx{0}', networkAddrB)
+  name: format('routetable-adx{0}-subnet', networkAddrB)
   location: location
+  properties: {
+    routes: [
+      {
+        name: format('route-{0}-adx-to-internet', networkAddrB)
+        properties: {
+          addressPrefix: '0.0.0.0/0'
+          nextHopType: 'VirtualAppliance'
+          nextHopIpAddress: format('{0}.4', subnetFirewall)
+        }
+      }
+    ]
+    disableBgpRoutePropagation: true
+  }
 }
+
 resource virtualNetworkAdxSpoke 'Microsoft.Network/virtualNetworks@2020-05-01' = {
   location: location
   name: adxVnetName
@@ -261,9 +277,6 @@ resource adxPublicSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' 
     addressPrefix: subnetCidrAdx
     networkSecurityGroup: {
       id: networkSecurityGroupAdx.id
-    }
-    routeTable: {
-      id: routeTableAdx.id
     }
     delegations: [
       {
@@ -695,6 +708,12 @@ resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = {
   location: location
   properties: {
     threatIntelMode: 'Alert'
+    dnsSettings: {
+      enableProxy: true
+      servers: [
+        format('{0}.4', subnetFirewall)
+      ]
+    }
   }
 }
 
@@ -773,6 +792,22 @@ resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectio
   }
 }
 
+param aadLogin1Fqdn string
+param aadLogin2Fqdn string
+param aadGraph1Fqdn string
+param aadGraph2Fqdn string
+param aadGraphPpeFqdn string
+param caMsOcspFqdn string
+param monitorProdWarmpathFqdn string
+param monitorGcsProdFqdn string
+param monitorProdDiagnosticsFqdn string
+param monitorShoeboxFqdn string
+param caDigicertOcspFqdn string
+param caDigicertCrlFqdn string
+param caMsCrlFqdn string
+param caMsFqdn string
+param storageFqdn string
+param keyVaultFqdn string
 var appRuleCollectionGroupName = format('{0}/DefaultApplicationRuleCollectionGroup', nameFirewallPolicy)
 resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = {
   name: appRuleCollectionGroupName
@@ -782,6 +817,112 @@ resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollecti
   properties: {
     priority: 300
     ruleCollections: [
+      {
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+        action: {
+          type: 'Allow'
+        }
+        name: 'adx-rule-arc'
+        priority: 310
+        rules: [
+          {
+            ruleType: 'ApplicationRule'
+            name: 'aad-rule'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              aadLogin1Fqdn
+              aadLogin2Fqdn
+              aadGraph1Fqdn
+              aadGraph2Fqdn
+              aadGraphPpeFqdn 
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupAdx.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'monitor-rule'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              monitorProdWarmpathFqdn
+              monitorGcsProdFqdn
+              monitorProdDiagnosticsFqdn
+              monitorShoeboxFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupAdx.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'certificate-authority-rule'
+            protocols: [
+              {
+                protocolType: 'Http'
+                port: 80
+              }
+            ]
+            targetFqdns: [
+              caMsOcspFqdn
+              caDigicertCrlFqdn
+              caMsCrlFqdn
+              caMsFqdn
+              caDigicertOcspFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupAdx.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'storage-rule'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              storageFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupAdx.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'keyvault-rule'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              keyVaultFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupAdx.id
+            ]
+          }
+        ]
+      }
       {
         ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
         action: {
