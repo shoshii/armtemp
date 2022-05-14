@@ -788,6 +788,50 @@ resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectio
           }
         ]
       }
+      {
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+        action: {
+          type: 'Allow'
+        }
+        name: 'adx-nrc'
+        priority: 220
+        rules: [
+          {
+            ruleType: 'NetworkRule'
+            name: 'eventhub'
+            ipProtocols: [
+              'UDP'
+              'TCP'
+            ]
+            destinationAddresses: [
+              'EventHub'
+            ]
+            sourceIpGroups: [
+              ipgroupAdx.id
+            ]
+            destinationPorts: [
+              '443'
+              '5671'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'monitor'
+            ipProtocols: [
+              'TCP'
+            ]
+            destinationAddresses: [
+              'AzureMonitor'
+            ]
+            sourceAddresses: [
+              '*'
+            ]
+            destinationPorts: [
+              '443'
+            ]
+          }
+        ]
+      }
     ]
   }
 }
