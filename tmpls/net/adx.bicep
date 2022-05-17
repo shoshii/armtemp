@@ -21,31 +21,31 @@ param dnsLabelPrefix string
 var nsgName = format('common-nsg-{0}', networkAddrB)
 param clientIp string
 
-// hdi params ------------------------------------------------------------------------------------------------
+// adx params ------------------------------------------------------------------------------------------------
 
 @description('CIDR range for the public subnet..')
-param subnetCidrHdi string = format('10.{0}.0.0/20', int(networkAddrB) + 2)
+param subnetCidrAdx string = format('10.{0}.0.0/20', int(networkAddrB) + 2)
 
 @description('The name of the public subnet to create.')
-param hdiPublicSubnetName string = 'public-subnet'
+param adxPublicSubnetName string = 'public-subnet'
 
 @description('CIDR range for the vnet.')
-param vnetCidrHdi string = format('10.{0}.0.0/16', int(networkAddrB) + 2)
+param vnetCidrAdx string = format('10.{0}.0.0/16', int(networkAddrB) + 2)
 
 @description('The name of the virtual network to create.')
-param hdiVnetName string = format('hdinsight-vnet-{0}', networkAddrB)
+param adxVnetName string = format('dataexlorer-vnet-{0}', networkAddrB)
 
-//@description('The name of the Azure Data Explorer Cluster to create.')
-//param clusterName string = format('vnetinj{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
+@description('The name of the Azure Data Explorer Cluster to create.')
+param clusterName string = format('vnet{0}{1}', networkAddrB, uniqueString(resourceGroup().id))
 
-// hdi -------------------------------------------------------------------------------
-resource networkSecurityGroupHdi 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
-  name: format('nsg-hdi{0}', networkAddrB)
+// adx -------------------------------------------------------------------------------
+resource networkSecurityGroupAdx 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
+  name: format('nsg-adx{0}', networkAddrB)
   location: location
   properties: {
     securityRules: [
       {
-        name: 'hdi-internal-inbound'
+        name: 'adx-internal-inbound'
         properties: {
           description: 'Required for worker nodes communication within a cluster.'
           protocol: '*'
@@ -59,19 +59,48 @@ resource networkSecurityGroupHdi 'Microsoft.Network/networkSecurityGroups@2019-1
         }
       }
       {
-        name: 'hdi-management-outbound'
+        name: 'adx-management-inbound'
         properties: {
-          description: 'allow access to HDI management.'
+          description: 'allow access from Data Management to a cluster.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '443'
+          sourceAddressPrefix: 'AzureDataExplorerManagement'
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 101
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'adx-monitor-inbound'
+        properties: {
+          description: 'allow access from Health Monitoring to a cluster.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '443'
+          sourceAddressPrefix: '20.43.89.90'
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 102
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'adx-loadbalancer-inbound'
+        properties: {
+          description: 'allow access from Load Balancer to a cluster.'
           protocol: 'Tcp'
           sourcePortRange: '*'
           destinationPortRanges: [
             '443'
+            '80'
           ]
-          sourceAddressPrefix: 'VirtualNetwork'
-          destinationAddressPrefix: 'HDInsight'
+          sourceAddressPrefix: 'AzureLoadBalancer'
+          destinationAddressPrefix: 'VirtualNetwork'
           access: 'Allow'
-          priority: 110
-          direction: 'Outbound'
+          priority: 103
+          direction: 'Inbound'
         }
       }
       {
@@ -92,59 +121,166 @@ resource networkSecurityGroupHdi 'Microsoft.Network/networkSecurityGroups@2019-1
         }
       }
       {
-        name: 'allowRDPfromClient'
+        name: 'adx-storage-outbound'
         properties: {
-          description: 'allow RDP from client'
+          description: 'allow access from a cluster to Storage.'
           protocol: 'Tcp'
           sourcePortRange: '*'
-          destinationPortRange: '3389'
-          sourceAddressPrefix: clientIp
-          destinationAddressPrefix: '*'
+          destinationPortRanges: [
+            '443'
+          ]
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'Storage'
           access: 'Allow'
-          priority: 310
-          direction: 'Inbound'
+          priority: 110
+          direction: 'Outbound'
         }
       }
       {
-        name: 'allowSSHfromClient'
+        name: 'adx-datalake-outbound'
         properties: {
-          description: 'allow SSH from client'
+          description: 'allow access from a cluster to AzureDataLake.'
           protocol: 'Tcp'
           sourcePortRange: '*'
-          destinationPortRange: '22'
-          sourceAddressPrefix: clientIp
-          destinationAddressPrefix: '*'
+          destinationPortRanges: [
+            '443'
+          ]
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'AzureDataLake'
           access: 'Allow'
-          priority: 320
-          direction: 'Inbound'
+          priority: 111
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'adx-eventhub-outbound'
+        properties: {
+          description: 'allow access from a cluster to EventHub.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRanges: [
+            '443'
+            '5671'
+          ]
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'EventHub'
+          access: 'Allow'
+          priority: 112
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'adx-AzureMonitor-outbound'
+        properties: {
+          description: 'allow access from a cluster to AzureMonitor.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRanges: [
+            '443'
+          ]
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'AzureMonitor'
+          access: 'Allow'
+          priority: 113
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'adx-AzureActiveDirectory-outbound'
+        properties: {
+          description: 'allow access from a cluster to AzureActiveDirectory.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRanges: [
+            '443'
+          ]
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'AzureActiveDirectory'
+          access: 'Allow'
+          priority: 114
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'adx-AzureKeyVault-outbound'
+        properties: {
+          description: 'allow access from a cluster to AzureKeyVault.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRanges: [
+            '443'
+          ]
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'AzureKeyVault'
+          access: 'Allow'
+          priority: 115
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'adx-internet-outbound'
+        properties: {
+          description: 'allow access from a cluster to *.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRanges: [
+            '443'
+            '80'
+            '3306'
+          ]
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'Internet'
+          access: 'Allow'
+          priority: 116
+          direction: 'Outbound'
         }
       }
     ]
   }
 }
-resource virtualNetworkHdiSpoke 'Microsoft.Network/virtualNetworks@2020-05-01' = {
+
+// to be attached adx subnet
+resource routeTableAdx 'Microsoft.Network/routeTables@2019-11-01' = {
+  name: format('routetable-adx{0}-subnet', networkAddrB)
   location: location
-  name: hdiVnetName
+  properties: {
+    routes: [
+      {
+        name: format('route-{0}-adx-to-internet', networkAddrB)
+        properties: {
+          addressPrefix: '0.0.0.0/0'
+          nextHopType: 'VirtualAppliance'
+          nextHopIpAddress: format('{0}.4', subnetFirewall)
+        }
+      }
+    ]
+    disableBgpRoutePropagation: true
+  }
+}
+
+resource virtualNetworkAdxSpoke 'Microsoft.Network/virtualNetworks@2020-05-01' = {
+  location: location
+  name: adxVnetName
   properties: {
     addressSpace: {
       addressPrefixes: [
-        vnetCidrHdi
+        vnetCidrAdx
       ]
     }
   }
 }
 
-resource hdiPublicSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
-  name: hdiPublicSubnetName
-  parent: virtualNetworkHdiSpoke
+resource adxPublicSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+  name: adxPublicSubnetName
+  parent: virtualNetworkAdxSpoke
   properties: {
-    addressPrefix: subnetCidrHdi
+    addressPrefix: subnetCidrAdx
     networkSecurityGroup: {
-      id: networkSecurityGroupHdi.id
+      id: networkSecurityGroupAdx.id
     }
     delegations: [
       {
-        name: format('hdinsight-del-public{0}', networkAddrB)
+        name: format('dataexlorer-del-public{0}', networkAddrB)
         properties: {
           serviceName: 'Microsoft.Kusto/clusters'
         }
@@ -152,29 +288,29 @@ resource hdiPublicSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' 
     ]
   }
 }
-/*
-resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
-  name: clusterName
+
+resource publicIPAddressDataManagement 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
+  name: format('pip-adx-dm{0}', networkAddrB)
   location: location
+  sku: {
+    name: 'Standard'
+  }
   properties: {
-    clusterVersion: '4.0'
-    osType: 'Linux'
-    tier: 'Standard'
-    clusterDefinition: {
-      kind: 'hadoop'
-      configurations: {
-        gateway: {
-          restAuthCredential: {
-            isEnabled: true
-            username: adminUserName
-            password: adminUserPassword
-          }
-        }
-      }
-    }
+    publicIPAllocationMethod: 'Static'
+    publicIPAddressVersion: 'IPv4'
   }
 }
-*/
+resource publicIPAddressEngine 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
+  name: format('pip-adx-engine{0}', networkAddrB)
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    publicIPAllocationMethod: 'Static'
+    publicIPAddressVersion: 'IPv4'
+  }
+}
 
 // other resources ---------------------------------------------------------------------
 resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
@@ -432,7 +568,7 @@ resource localNetworkGateway 'Microsoft.Network/localNetworkGateways@2019-11-01'
   name: onpremNetworkGatewayName
   location: location
   dependsOn: [
-    firewall
+    virtualNetworkGateway
   ]
   properties: {
     localNetworkAddressSpace: {
@@ -465,6 +601,7 @@ resource vpnVnetConnection 'Microsoft.Network/connections@2020-11-01' = {
   }
 }
 
+/*
 // Azure Firewall
 var ipgroupNameAzureSpoke = format('ipgroup-spoke-{0}-{1}', uniqueString(resourceGroup().id), networkAddrB)
 resource ipgroupAzureSpoke 'Microsoft.Network/ipGroups@2021-05-01' = {
@@ -498,13 +635,13 @@ resource ipgroupOnprem 'Microsoft.Network/ipGroups@2021-05-01' = {
   }
 }
 
-var ipgroupNameHdi = format('ipgroup-hdi-pub-{0}-{1}', uniqueString(resourceGroup().id), networkAddrB)
-resource ipgroupHdi 'Microsoft.Network/ipGroups@2021-05-01' = {
-  name: ipgroupNameHdi
+var ipgroupNameAdx = format('ipgroup-adx-pub-{0}-{1}', uniqueString(resourceGroup().id), networkAddrB)
+resource ipgroupAdx 'Microsoft.Network/ipGroups@2021-05-01' = {
+  name: ipgroupNameAdx
   location: location
   properties: {
     ipAddresses: [
-      subnetCidrHdi
+      subnetCidrAdx
     ]
   }
 }
@@ -551,11 +688,17 @@ var nameFirewallPolicy = format('{0}-policy', nameFirewall)
 resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = {
   name: nameFirewallPolicy
   dependsOn: [
-    virtualNetworkGateway
+    subnetAzureHubFirewall
   ]
   location: location
   properties: {
     threatIntelMode: 'Alert'
+    dnsSettings: {
+      enableProxy: true
+      servers: [
+        format('{0}.4', subnetFirewall)
+      ]
+    }
   }
 }
 
@@ -630,10 +773,70 @@ resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectio
           }
         ]
       }
+      {
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+        action: {
+          type: 'Allow'
+        }
+        name: 'adx-nrc'
+        priority: 220
+        rules: [
+          {
+            ruleType: 'NetworkRule'
+            name: 'eventhub'
+            ipProtocols: [
+              'UDP'
+              'TCP'
+            ]
+            destinationAddresses: [
+              'EventHub'
+            ]
+            sourceIpGroups: [
+              ipgroupAdx.id
+            ]
+            destinationPorts: [
+              '443'
+              '5671'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'monitor'
+            ipProtocols: [
+              'TCP'
+            ]
+            destinationAddresses: [
+              'AzureMonitor'
+            ]
+            sourceAddresses: [
+              '*'
+            ]
+            destinationPorts: [
+              '443'
+            ]
+          }
+        ]
+      }
     ]
   }
 }
 
+param aadLogin1Fqdn string
+param aadLogin2Fqdn string
+param aadGraph1Fqdn string
+param aadGraph2Fqdn string
+param aadGraphPpeFqdn string
+param caMsOcspFqdn string
+param monitorProdWarmpathFqdn string
+param monitorGcsProdFqdn string
+param monitorProdDiagnosticsFqdn string
+param monitorShoeboxFqdn string
+param caDigicertOcspFqdn string
+param caDigicertCrlFqdn string
+param caMsCrlFqdn string
+param caMsFqdn string
+param storageFqdn string
+param keyVaultFqdn string
 var appRuleCollectionGroupName = format('{0}/DefaultApplicationRuleCollectionGroup', nameFirewallPolicy)
 resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = {
   name: appRuleCollectionGroupName
@@ -643,6 +846,112 @@ resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollecti
   properties: {
     priority: 300
     ruleCollections: [
+      {
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+        action: {
+          type: 'Allow'
+        }
+        name: 'adx-rule-arc'
+        priority: 310
+        rules: [
+          {
+            ruleType: 'ApplicationRule'
+            name: 'aad-rule'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              aadLogin1Fqdn
+              aadLogin2Fqdn
+              aadGraph1Fqdn
+              aadGraph2Fqdn
+              aadGraphPpeFqdn 
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupAdx.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'monitor-rule'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              monitorProdWarmpathFqdn
+              monitorGcsProdFqdn
+              monitorProdDiagnosticsFqdn
+              monitorShoeboxFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupAdx.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'certificate-authority-rule'
+            protocols: [
+              {
+                protocolType: 'Http'
+                port: 80
+              }
+            ]
+            targetFqdns: [
+              caMsOcspFqdn
+              caDigicertCrlFqdn
+              caMsCrlFqdn
+              caMsFqdn
+              caDigicertOcspFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupAdx.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'storage-rule'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              storageFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupAdx.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'keyvault-rule'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              keyVaultFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupAdx.id
+            ]
+          }
+        ]
+      }
       {
         ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
         action: {
@@ -711,6 +1020,7 @@ resource firewall 'Microsoft.Network/azureFirewalls@2021-05-01' = {
   dependsOn: [
     virtualNetworkAzureHub
     ipgroupAzureSpoke
+    ipgroupAdx
     nwRuleCollectionGroup
     appRuleCollectionGroup
   ]
@@ -721,8 +1031,10 @@ resource firewall 'Microsoft.Network/azureFirewalls@2021-05-01' = {
     }
   }
 }
+*/
 
 // Bastion
+/*
 var pipNameBastionHost = format('pip-bastion-host{0}', networkAddrB)
 resource publicIPAddressBastionHost 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
   name: pipNameBastionHost
@@ -761,8 +1073,9 @@ resource bastionHost 'Microsoft.Network/bastionHosts@2021-05-01' = {
     ]
   }
 }
-
+*/
 // vnet peering between hub and spoke
+/*
 resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
   name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkAzureSpoke.name)
   dependsOn: [
@@ -781,7 +1094,7 @@ resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@
 resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
   name: format('{0}/peering_{1}_{2}', virtualNetworkAzureSpoke.name, virtualNetworkAzureSpoke.name, virtualNetworkAzureHub.name)
   dependsOn: [
-    bastionHost
+    peeringSpoke
   ]
   properties: {
     allowVirtualNetworkAccess: true
@@ -793,10 +1106,11 @@ resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@20
     }
   }
 }
-
-// vnet peering between hub and hdi spoke
-resource peeringHdiSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
-  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkHdiSpoke.name)
+*/
+// vnet peering between hub and adx spoke
+/*
+resource peeringAdxSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkAdxSpoke.name)
   dependsOn: [
     peeringHub
   ]
@@ -806,14 +1120,14 @@ resource peeringHdiSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerin
     allowGatewayTransit: true
     useRemoteGateways: false
     remoteVirtualNetwork: {
-      id: virtualNetworkHdiSpoke.id
+      id: virtualNetworkAdxSpoke.id
     }
   }
 }
-resource peeringHubHdi 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
-  name: format('{0}/peering_{1}_{2}', virtualNetworkHdiSpoke.name, virtualNetworkHdiSpoke.name, virtualNetworkAzureHub.name)
+resource peeringHubAdx 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkAdxSpoke.name, virtualNetworkAdxSpoke.name, virtualNetworkAzureHub.name)
   dependsOn: [
-    peeringHub
+    peeringAdxSpoke
   ]
   properties: {
     allowVirtualNetworkAccess: true
@@ -825,11 +1139,114 @@ resource peeringHubHdi 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings
     }
   }
 }
-
+*/
 param adminUserName string
 @secure()
 @minLength(12)
 param adminUserPassword string
+param adminPublicKey string
+// VMs in hub network ===================================================================
+// VM in hub
+/*
+var nicNameWinAzureHub = format('nicwinazurehub{0}', networkAddrB)
+resource networkInterfaceWinAzureHub 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: nicNameWinAzureHub
+  location: location
+  dependsOn: [
+    peeringHubAdx
+  ]
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfig-win-azurehub{0}', networkAddrB)
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: subnetAzureHubDefault.id
+          }
+        }
+      }
+    ]
+  }
+}
+
+var storageNameWinAzureHub = format('wah{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
+resource storageaccountWinAzureHub 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageNameWinAzureHub
+  location: location
+  kind: 'Storage'
+  sku: {
+    name: 'Standard_LRS'
+  }
+}
+
+var vmNameWinAzureHub = format('winazhub{0}', networkAddrB)
+resource vmWinAzureHub 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmNameWinAzureHub
+  location: location
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_D2s_v3'
+    }
+    osProfile: {
+      computerName: vmNameWinAzureHub
+      adminUsername: adminUserName
+      adminPassword: adminUserPassword
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'MicrosoftWindowsServer'
+        offer: 'WindowsServer'
+        sku: '2019-datacenter-gensecond'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+        managedDisk: {
+          storageAccountType: 'StandardSSD_LRS'
+        }
+      }
+      dataDisks: [
+        {
+          diskSizeGB: 1023
+          lun: 0
+          createOption: 'Empty'
+        }
+      ]
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterfaceWinAzureHub.id
+        }
+      ]
+    }
+    diagnosticsProfile: {
+      bootDiagnostics: {
+        enabled: true
+        storageUri:  reference(storageaccountWinAzureHub.id).primaryEndpoints.blob
+      }
+    }
+  }
+}
+
+resource extensionBaseAzureHub 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionBase', vmWinAzureHub.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Compute'
+    type: 'CustomScriptExtension'
+    typeHandlerVersion: '1.10'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_win.ps1'
+      ]
+      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_win.ps1'
+    }
+  }
+}
+
 
 // Windows Server VM in spoke
 var nicNameWinAzureSpoke = format('nicwinazurespoke{0}', networkAddrB)
@@ -849,9 +1266,6 @@ resource networkInterfaceWinAzureSpoke 'Microsoft.Network/networkInterfaces@2020
       }
     ]
   }
-  dependsOn:[
-    virtualNetworkAzureSpoke
-  ]
 }
 
 var storageNameWinAzureSpoke = format('was{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
@@ -868,6 +1282,9 @@ var vmNameWinAzureSpoke = format('winazspoke{0}', networkAddrB)
 resource vmWinAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameWinAzureSpoke
   location: location
+  dependsOn: [
+    vmWinAzureHub
+  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -950,8 +1367,7 @@ resource networkInterfaceDsAzureSpoke 'Microsoft.Network/networkInterfaces@2020-
     ]
   }
   dependsOn:[
-    virtualNetworkAzureSpoke
-    vmWinAzureSpoke
+    networkInterfaceWinAzureSpoke
   ]
 }
 
@@ -969,6 +1385,9 @@ var vmNameDsAzureSpoke = format('dsazspoke{0}', networkAddrB)
 resource vmDsAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameDsAzureSpoke
   location: location
+  dependsOn: [
+    vmWinAzureSpoke
+  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1051,8 +1470,7 @@ resource networkInterfaceUbuntuAzureSpoke 'Microsoft.Network/networkInterfaces@2
     ]
   }
   dependsOn:[
-    virtualNetworkAzureSpoke
-    vmDsAzureSpoke
+    networkInterfaceDsAzureSpoke
   ]
 }
 
@@ -1061,6 +1479,9 @@ var vmNameUbuntuAzureSpoke = format('ubuazspoke{0}', networkAddrB)
 resource vmUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameUbuntuAzureSpoke
   location: location
+  dependsOn: [
+    vmDsAzureSpoke
+  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1118,112 +1539,7 @@ resource extensionBaseUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines/extens
   }
 }
 
-// VMs in hub network ===================================================================
-// VM in hub
-var nicNameWinAzureHub = format('nicwinazurehub{0}', networkAddrB)
-resource networkInterfaceWinAzureHub 'Microsoft.Network/networkInterfaces@2020-11-01' = {
-  name: nicNameWinAzureHub
-  location: location
-  properties: {
-    ipConfigurations: [
-      {
-        name: format('ipconfig-win-azurehub{0}', networkAddrB)
-        properties: {
-          privateIPAllocationMethod: 'Dynamic'
-          subnet: {
-            id: subnetAzureHubDefault.id
-          }
-        }
-      }
-    ]
-  }
-  dependsOn:[
-    virtualNetworkAzureHub
-    firewall
-    networkInterfaceWinAzureSpoke
-  ]
-}
-
-var storageNameWinAzureHub = format('wah{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
-resource storageaccountWinAzureHub 'Microsoft.Storage/storageAccounts@2021-02-01' = {
-  name: storageNameWinAzureHub
-  location: location
-  kind: 'Storage'
-  sku: {
-    name: 'Standard_LRS'
-  }
-}
-
-var vmNameWinAzureHub = format('winazhub{0}', networkAddrB)
-resource vmWinAzureHub 'Microsoft.Compute/virtualMachines@2020-12-01' = {
-  name: vmNameWinAzureHub
-  location: location
-  properties: {
-    hardwareProfile: {
-      vmSize: 'Standard_D2s_v3'
-    }
-    osProfile: {
-      computerName: vmNameWinAzureHub
-      adminUsername: adminUserName
-      adminPassword: adminUserPassword
-    }
-    storageProfile: {
-      imageReference: {
-        publisher: 'MicrosoftWindowsServer'
-        offer: 'WindowsServer'
-        sku: '2019-datacenter-gensecond'
-        version: 'latest'
-      }
-      osDisk: {
-        createOption: 'FromImage'
-        managedDisk: {
-          storageAccountType: 'StandardSSD_LRS'
-        }
-      }
-      dataDisks: [
-        {
-          diskSizeGB: 1023
-          lun: 0
-          createOption: 'Empty'
-        }
-      ]
-    }
-    networkProfile: {
-      networkInterfaces: [
-        {
-          id: networkInterfaceWinAzureHub.id
-        }
-      ]
-    }
-    diagnosticsProfile: {
-      bootDiagnostics: {
-        enabled: true
-        storageUri:  reference(storageaccountWinAzureHub.id).primaryEndpoints.blob
-      }
-    }
-  }
-  dependsOn: [
-    vmWinAzureSpoke
-  ]
-}
-
-resource extensionBaseAzureHub 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
-  name: format('{0}/extensionBase', vmWinAzureHub.name)
-  location: location
-  properties: {
-    publisher: 'Microsoft.Compute'
-    type: 'CustomScriptExtension'
-    typeHandlerVersion: '1.10'
-    autoUpgradeMinorVersion: true
-    settings: {
-      fileUris: [
-        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_win.ps1'
-      ]
-      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_win.ps1'
-    }
-  }
-}
-
+*/
 // VMs in onpremise ===================================================================
 // windows server VM in onpremise
 var pipNameWinOnprem = format('winsrv-onprem-pip-{0}', networkAddrB)
@@ -1258,9 +1574,6 @@ resource networkInterfaceWinOnprem 'Microsoft.Network/networkInterfaces@2020-11-
       }
     ]
   }
-  dependsOn:[
-    virtualNetworkOnprem
-  ]
 }
 
 var storageNameWinOnprem = format('won{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
@@ -1321,9 +1634,6 @@ resource vmWinOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
       }
     }
   }
-  dependsOn: [
-    vmWinAzureHub
-  ]
 }
 
 resource extensionBaseWinOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
@@ -1342,7 +1652,7 @@ resource extensionBaseWinOnprem 'Microsoft.Compute/virtualMachines/extensions@20
     }
   }
 }
-
+/*
 // data science machine VM in onpremise
 var pipNameDsOnprem = format('dsvm-onprem-pip-{0}', networkAddrB)
 resource publicIPAddressDsOnprem 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
@@ -1377,7 +1687,6 @@ resource networkInterfaceDsOnprem 'Microsoft.Network/networkInterfaces@2020-11-0
     ]
   }
   dependsOn:[
-    virtualNetworkOnprem
     networkInterfaceWinOnprem
   ]
 }
@@ -1396,6 +1705,9 @@ var vmNameDsOnprem = format('dsonprem{0}', networkAddrB)
 resource vmDsOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameDsOnprem
   location: location
+  dependsOn: [
+    vmWinOnprem
+  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1440,9 +1752,6 @@ resource vmDsOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
       }
     }
   }
-  dependsOn: [
-    vmWinOnprem
-  ]
 }
 
 resource extensionBaseDsOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
@@ -1481,8 +1790,7 @@ resource networkInterfaceUbuntuOnprem 'Microsoft.Network/networkInterfaces@2020-
     ]
   }
   dependsOn:[
-    virtualNetworkOnprem
-    vmDsOnprem
+    networkInterfaceDsOnprem
   ]
 }
 
@@ -1490,6 +1798,9 @@ var vmNameUbuntuOnprem = format('ubuonprem{0}', networkAddrB)
 resource vmUbuntuOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameUbuntuOnprem
   location: location
+  dependsOn: [
+    vmDsOnprem
+  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1529,7 +1840,7 @@ resource vmUbuntuOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/*
 resource extensionBaseUbuntuOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmUbuntuOnprem.name)
   location: location
@@ -1546,3 +1857,125 @@ resource extensionBaseUbuntuOnprem 'Microsoft.Compute/virtualMachines/extensions
     }
   }
 }
+
+
+// SQL Server in onpremise
+var pipNameSqlOnprem = format('sql-onprem-pip-{0}', networkAddrB)
+resource publicIPAddressSqlOnprem 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
+  name: pipNameSqlOnprem
+  location: location
+  properties: {
+    publicIPAllocationMethod: 'Static'
+    dnsSettings: {
+      domainNameLabel: format('{0}-{1}', dnsLabelPrefix, vmNameSqlOnprem)
+    }
+  }
+}
+
+var nicNameSqlOnprem = format('nicsqlvmonprem{0}', networkAddrB)
+resource networkInterfaceSqlOnprem 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: nicNameSqlOnprem
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfig-sqlvm-onprem{0}', networkAddrB)
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: subnetOnprem.id
+          }
+          publicIPAddress: {
+            id: publicIPAddressSqlOnprem.id
+          }
+        }
+      }
+    ]
+  }
+  dependsOn:[
+    networkInterfaceUbuntuOnprem
+  ]
+}
+
+var storageNameSqlOnprem = format('son{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
+resource storageaccountSqlOnprem 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageNameSqlOnprem
+  location: location
+  kind: 'Storage'
+  sku: {
+    name: 'Standard_LRS'
+  }
+}
+
+var vmNameSqlOnprem = format('sqlonprem{0}', networkAddrB)
+resource vmSqlOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmNameSqlOnprem
+  location: location
+  dependsOn: [
+    vmUbuntuOnprem
+  ]
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_D2s_v3'
+    }
+    osProfile: {
+      computerName: vmNameSqlOnprem
+      adminUsername: adminUserName
+      adminPassword: adminUserPassword
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'microsoftsqlserver'
+        offer: 'sql2019-ws2019'
+        sku: 'enterprise'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+        managedDisk: {
+          storageAccountType: 'StandardSSD_LRS'
+        }
+      }
+      dataDisks: [
+        {
+          diskSizeGB: 1023
+          lun: 0
+          createOption: 'Empty'
+        }
+      ]
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterfaceSqlOnprem.id
+        }
+      ]
+    }
+    diagnosticsProfile: {
+      bootDiagnostics: {
+        enabled: true
+        storageUri:  reference(storageaccountSqlOnprem.id).primaryEndpoints.blob
+      }
+    }
+  }
+}
+
+resource extensionBaseSqlOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionSql', vmSqlOnprem.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.SqlServer.Management'
+    type: 'SqlIaaSAgent'
+    typeHandlerVersion: '2.0'
+    autoUpgradeMinorVersion: true
+    settings: {
+      ServerConfigurationsManagementSettings: {
+        SQLConnectivityUpdateSettings: {
+          ConnectivityType: 'PRIVATE'
+          Port: '1433'
+        }
+      }
+    }
+  }
+}
+*/

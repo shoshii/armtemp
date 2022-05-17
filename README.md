@@ -61,14 +61,22 @@ $ misc/get_adx_dependencies.ps1 <subscription id> <adx cluster name> <resource g
 - [Cosmos プライベート エンドポイント サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.documentdb/cosmosdb-private-endpoint/main.bicep)
 - [SQL Server Managed Instance サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/demos/azure-sql-managed-instance/azuredeploy.json)
 - [HDInsight サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.hdinsight/hdinsight-datalake-store-azure-storage/azuredeploy.json)
+- [Data Lake Gen2 サンプル](https://gist.github.com/dazfuller/0740f1640225dc8ea0eb29a8e6f88a6a)
 
 ### 基本知識
+
+#### bicep, arm テンプレート, Azure CLI
 - [Bicepとは](https://docs.microsoft.com/ja-jp/azure/azure-resource-manager/bicep/overview?tabs=bicep)
 - [VSCode で Bicepファイルを作成する](https://docs.microsoft.com/ja-jp/azure/azure-resource-manager/bicep/quickstart-create-bicep-use-visual-studio-code?tabs=CLI)
 - [Bicepでループ処理](https://blog.ivemo.se/Using-loops-with-Bicep/)
 - [Azure CLI で ARM のデプロイテンプレートを使用する方法](https://docs.microsoft.com/ja-jp/azure/azure-resource-manager/templates/deploy-cli)
 - [Azure CLI でサインインする](https://docs.microsoft.com/ja-jp/cli/azure/authenticate-azure-cli)
 - [Azure CLI でサブスクリプションを管理する](https://docs.microsoft.com/ja-jp/cli/azure/manage-azure-subscriptions-azure-cli)
+
+#### ネットワーク
 - [プライベート エンドポイント ネットワーク ポリシー](https://docs.microsoft.com/ja-jp/azure/private-link/disable-private-endpoint-network-policy)
 - [サービス エンドポイント ポリシー](https://docs.microsoft.com/ja-jp/azure/virtual-network/virtual-network-service-endpoint-policies-overview)
 - [サービス エンドポイントとプライベート エンドポイントの違い](https://qiita.com/taka_s/items/340c9c52f1e948f0f753)
+
+#### HDInsight
+- [HDIでプライベート リンクを有効にする](https://docs.microsoft.com/ja-jp/azure/hdinsight/hdinsight-private-link)

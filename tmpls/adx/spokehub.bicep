@@ -584,7 +584,7 @@ resource localNetworkGateway 'Microsoft.Network/localNetworkGateways@2019-11-01'
   name: onpremNetworkGatewayName
   location: location
   dependsOn: [
-    firewall
+    virtualNetworkGateway
   ]
   properties: {
     localNetworkAddressSpace: {
@@ -703,7 +703,7 @@ var nameFirewallPolicy = format('{0}-policy', nameFirewall)
 resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = {
   name: nameFirewallPolicy
   dependsOn: [
-    virtualNetworkGateway
+    subnetAzureHubFirewall
   ]
   location: location
   properties: {
@@ -1035,6 +1035,7 @@ resource firewall 'Microsoft.Network/azureFirewalls@2021-05-01' = {
   dependsOn: [
     virtualNetworkAzureHub
     ipgroupAzureSpoke
+    ipgroupAdx
     nwRuleCollectionGroup
     appRuleCollectionGroup
   ]
@@ -1105,7 +1106,7 @@ resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@
 resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
   name: format('{0}/peering_{1}_{2}', virtualNetworkAzureSpoke.name, virtualNetworkAzureSpoke.name, virtualNetworkAzureHub.name)
   dependsOn: [
-    bastionHost
+    peeringSpoke
   ]
   properties: {
     allowVirtualNetworkAccess: true
@@ -1119,6 +1120,7 @@ resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@20
 }
 
 // vnet peering between hub and adx spoke
+/*
 resource peeringAdxSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
   name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkAdxSpoke.name)
   dependsOn: [
@@ -1137,7 +1139,7 @@ resource peeringAdxSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerin
 resource peeringHubAdx 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
   name: format('{0}/peering_{1}_{2}', virtualNetworkAdxSpoke.name, virtualNetworkAdxSpoke.name, virtualNetworkAzureHub.name)
   dependsOn: [
-    peeringHub
+    peeringAdxSpoke
   ]
   properties: {
     allowVirtualNetworkAccess: true
@@ -1149,11 +1151,114 @@ resource peeringHubAdx 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings
     }
   }
 }
-
+*/
 param adminUserName string
 @secure()
 @minLength(12)
 param adminUserPassword string
+param adminPublicKey string
+// VMs in hub network ===================================================================
+// VM in hub
+/*
+var nicNameWinAzureHub = format('nicwinazurehub{0}', networkAddrB)
+resource networkInterfaceWinAzureHub 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: nicNameWinAzureHub
+  location: location
+  dependsOn: [
+    peeringHubAdx
+  ]
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfig-win-azurehub{0}', networkAddrB)
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: subnetAzureHubDefault.id
+          }
+        }
+      }
+    ]
+  }
+}
+
+var storageNameWinAzureHub = format('wah{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
+resource storageaccountWinAzureHub 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageNameWinAzureHub
+  location: location
+  kind: 'Storage'
+  sku: {
+    name: 'Standard_LRS'
+  }
+}
+
+var vmNameWinAzureHub = format('winazhub{0}', networkAddrB)
+resource vmWinAzureHub 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmNameWinAzureHub
+  location: location
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_D2s_v3'
+    }
+    osProfile: {
+      computerName: vmNameWinAzureHub
+      adminUsername: adminUserName
+      adminPassword: adminUserPassword
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'MicrosoftWindowsServer'
+        offer: 'WindowsServer'
+        sku: '2019-datacenter-gensecond'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+        managedDisk: {
+          storageAccountType: 'StandardSSD_LRS'
+        }
+      }
+      dataDisks: [
+        {
+          diskSizeGB: 1023
+          lun: 0
+          createOption: 'Empty'
+        }
+      ]
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterfaceWinAzureHub.id
+        }
+      ]
+    }
+    diagnosticsProfile: {
+      bootDiagnostics: {
+        enabled: true
+        storageUri:  reference(storageaccountWinAzureHub.id).primaryEndpoints.blob
+      }
+    }
+  }
+}
+
+resource extensionBaseAzureHub 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionBase', vmWinAzureHub.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Compute'
+    type: 'CustomScriptExtension'
+    typeHandlerVersion: '1.10'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_win.ps1'
+      ]
+      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_win.ps1'
+    }
+  }
+}
+
 
 // Windows Server VM in spoke
 var nicNameWinAzureSpoke = format('nicwinazurespoke{0}', networkAddrB)
@@ -1173,9 +1278,6 @@ resource networkInterfaceWinAzureSpoke 'Microsoft.Network/networkInterfaces@2020
       }
     ]
   }
-  dependsOn:[
-    virtualNetworkAzureSpoke
-  ]
 }
 
 var storageNameWinAzureSpoke = format('was{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
@@ -1192,6 +1294,9 @@ var vmNameWinAzureSpoke = format('winazspoke{0}', networkAddrB)
 resource vmWinAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameWinAzureSpoke
   location: location
+  dependsOn: [
+    vmWinAzureHub
+  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1274,8 +1379,7 @@ resource networkInterfaceDsAzureSpoke 'Microsoft.Network/networkInterfaces@2020-
     ]
   }
   dependsOn:[
-    virtualNetworkAzureSpoke
-    vmWinAzureSpoke
+    networkInterfaceWinAzureSpoke
   ]
 }
 
@@ -1293,6 +1397,9 @@ var vmNameDsAzureSpoke = format('dsazspoke{0}', networkAddrB)
 resource vmDsAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameDsAzureSpoke
   location: location
+  dependsOn: [
+    vmWinAzureSpoke
+  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1375,8 +1482,7 @@ resource networkInterfaceUbuntuAzureSpoke 'Microsoft.Network/networkInterfaces@2
     ]
   }
   dependsOn:[
-    virtualNetworkAzureSpoke
-    vmDsAzureSpoke
+    networkInterfaceDsAzureSpoke
   ]
 }
 
@@ -1385,6 +1491,9 @@ var vmNameUbuntuAzureSpoke = format('ubuazspoke{0}', networkAddrB)
 resource vmUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameUbuntuAzureSpoke
   location: location
+  dependsOn: [
+    vmDsAzureSpoke
+  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1442,112 +1551,7 @@ resource extensionBaseUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines/extens
   }
 }
 
-// VMs in hub network ===================================================================
-// VM in hub
-var nicNameWinAzureHub = format('nicwinazurehub{0}', networkAddrB)
-resource networkInterfaceWinAzureHub 'Microsoft.Network/networkInterfaces@2020-11-01' = {
-  name: nicNameWinAzureHub
-  location: location
-  properties: {
-    ipConfigurations: [
-      {
-        name: format('ipconfig-win-azurehub{0}', networkAddrB)
-        properties: {
-          privateIPAllocationMethod: 'Dynamic'
-          subnet: {
-            id: subnetAzureHubDefault.id
-          }
-        }
-      }
-    ]
-  }
-  dependsOn:[
-    virtualNetworkAzureHub
-    firewall
-    networkInterfaceWinAzureSpoke
-  ]
-}
-
-var storageNameWinAzureHub = format('wah{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
-resource storageaccountWinAzureHub 'Microsoft.Storage/storageAccounts@2021-02-01' = {
-  name: storageNameWinAzureHub
-  location: location
-  kind: 'Storage'
-  sku: {
-    name: 'Standard_LRS'
-  }
-}
-
-var vmNameWinAzureHub = format('winazhub{0}', networkAddrB)
-resource vmWinAzureHub 'Microsoft.Compute/virtualMachines@2020-12-01' = {
-  name: vmNameWinAzureHub
-  location: location
-  properties: {
-    hardwareProfile: {
-      vmSize: 'Standard_D2s_v3'
-    }
-    osProfile: {
-      computerName: vmNameWinAzureHub
-      adminUsername: adminUserName
-      adminPassword: adminUserPassword
-    }
-    storageProfile: {
-      imageReference: {
-        publisher: 'MicrosoftWindowsServer'
-        offer: 'WindowsServer'
-        sku: '2019-datacenter-gensecond'
-        version: 'latest'
-      }
-      osDisk: {
-        createOption: 'FromImage'
-        managedDisk: {
-          storageAccountType: 'StandardSSD_LRS'
-        }
-      }
-      dataDisks: [
-        {
-          diskSizeGB: 1023
-          lun: 0
-          createOption: 'Empty'
-        }
-      ]
-    }
-    networkProfile: {
-      networkInterfaces: [
-        {
-          id: networkInterfaceWinAzureHub.id
-        }
-      ]
-    }
-    diagnosticsProfile: {
-      bootDiagnostics: {
-        enabled: true
-        storageUri:  reference(storageaccountWinAzureHub.id).primaryEndpoints.blob
-      }
-    }
-  }
-  dependsOn: [
-    vmWinAzureSpoke
-  ]
-}
-
-resource extensionBaseAzureHub 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
-  name: format('{0}/extensionBase', vmWinAzureHub.name)
-  location: location
-  properties: {
-    publisher: 'Microsoft.Compute'
-    type: 'CustomScriptExtension'
-    typeHandlerVersion: '1.10'
-    autoUpgradeMinorVersion: true
-    settings: {
-      fileUris: [
-        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/script_win.ps1'
-      ]
-      commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_win.ps1'
-    }
-  }
-}
-
+*/
 // VMs in onpremise ===================================================================
 // windows server VM in onpremise
 var pipNameWinOnprem = format('winsrv-onprem-pip-{0}', networkAddrB)
@@ -1582,9 +1586,6 @@ resource networkInterfaceWinOnprem 'Microsoft.Network/networkInterfaces@2020-11-
       }
     ]
   }
-  dependsOn:[
-    virtualNetworkOnprem
-  ]
 }
 
 var storageNameWinOnprem = format('won{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
@@ -1645,9 +1646,6 @@ resource vmWinOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
       }
     }
   }
-  dependsOn: [
-    vmWinAzureHub
-  ]
 }
 
 resource extensionBaseWinOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
@@ -1666,7 +1664,7 @@ resource extensionBaseWinOnprem 'Microsoft.Compute/virtualMachines/extensions@20
     }
   }
 }
-
+/*
 // data science machine VM in onpremise
 var pipNameDsOnprem = format('dsvm-onprem-pip-{0}', networkAddrB)
 resource publicIPAddressDsOnprem 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
@@ -1701,7 +1699,6 @@ resource networkInterfaceDsOnprem 'Microsoft.Network/networkInterfaces@2020-11-0
     ]
   }
   dependsOn:[
-    virtualNetworkOnprem
     networkInterfaceWinOnprem
   ]
 }
@@ -1720,6 +1717,9 @@ var vmNameDsOnprem = format('dsonprem{0}', networkAddrB)
 resource vmDsOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameDsOnprem
   location: location
+  dependsOn: [
+    vmWinOnprem
+  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1764,9 +1764,6 @@ resource vmDsOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
       }
     }
   }
-  dependsOn: [
-    vmWinOnprem
-  ]
 }
 
 resource extensionBaseDsOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
@@ -1805,8 +1802,7 @@ resource networkInterfaceUbuntuOnprem 'Microsoft.Network/networkInterfaces@2020-
     ]
   }
   dependsOn:[
-    virtualNetworkOnprem
-    vmDsOnprem
+    networkInterfaceDsOnprem
   ]
 }
 
@@ -1814,6 +1810,9 @@ var vmNameUbuntuOnprem = format('ubuonprem{0}', networkAddrB)
 resource vmUbuntuOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameUbuntuOnprem
   location: location
+  dependsOn: [
+    vmDsOnprem
+  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1853,7 +1852,7 @@ resource vmUbuntuOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/*
 resource extensionBaseUbuntuOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmUbuntuOnprem.name)
   location: location
@@ -1870,6 +1869,7 @@ resource extensionBaseUbuntuOnprem 'Microsoft.Compute/virtualMachines/extensions
     }
   }
 }
+
 
 // SQL Server in onpremise
 var pipNameSqlOnprem = format('sql-onprem-pip-{0}', networkAddrB)
@@ -1905,8 +1905,7 @@ resource networkInterfaceSqlOnprem 'Microsoft.Network/networkInterfaces@2020-11-
     ]
   }
   dependsOn:[
-    virtualNetworkOnprem
-    networkInterfaceDsOnprem
+    networkInterfaceUbuntuOnprem
   ]
 }
 
@@ -1924,6 +1923,9 @@ var vmNameSqlOnprem = format('sqlonprem{0}', networkAddrB)
 resource vmSqlOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameSqlOnprem
   location: location
+  dependsOn: [
+    vmUbuntuOnprem
+  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1968,9 +1970,6 @@ resource vmSqlOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
       }
     }
   }
-  dependsOn: [
-    vmDsOnprem
-  ]
 }
 
 resource extensionBaseSqlOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
@@ -1991,3 +1990,4 @@ resource extensionBaseSqlOnprem 'Microsoft.Compute/virtualMachines/extensions@20
     }
   }
 }
+*/

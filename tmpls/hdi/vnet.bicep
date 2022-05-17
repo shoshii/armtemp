@@ -9,7 +9,7 @@ param clientIp string
 param subnetCidrHdi string = format('10.{0}.0.0/20', networkAddrB)
 
 @description('The name of the public subnet to create.')
-param hdiPublicSubnetName string = 'public-subnet'
+param hdiSubnetName string = 'hdi-subnet'
 
 @description('CIDR range for the vnet.')
 param vnetCidrHdi string = format('10.{0}.0.0/16', networkAddrB)
@@ -19,6 +19,9 @@ param hdiVnetName string = format('hdinsight-vnet-{0}', networkAddrB)
 
 @description('The name of the Azure Data Explorer Cluster to create.')
 param clusterName string = format('hdi{0}{1}',  uniqueString(resourceGroup().id), networkAddrB)
+
+var defaultSubnetName = 'default-subnet'
+var subnetCidrDefault = format('10.{0}.16.0/20', networkAddrB)
 
 // hdi -------------------------------------------------------------------------------
 resource networkSecurityGroupHdi 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
@@ -117,11 +120,22 @@ resource virtualNetworkHdiSpoke 'Microsoft.Network/virtualNetworks@2020-05-01' =
   }
 }
 
-resource hdiPublicSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
-  name: hdiPublicSubnetName
+resource hdiSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+  name: hdiSubnetName
   parent: virtualNetworkHdiSpoke
   properties: {
     addressPrefix: subnetCidrHdi
+    networkSecurityGroup: {
+      id: networkSecurityGroupHdi.id
+    }
+  }
+}
+
+resource defaultSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+  name: defaultSubnetName
+  parent: virtualNetworkHdiSpoke
+  properties: {
+    addressPrefix: subnetCidrDefault
     networkSecurityGroup: {
       id: networkSecurityGroupHdi.id
     }
@@ -142,6 +156,100 @@ param adminUserName string
 @secure()
 @minLength(12)
 param adminUserPassword string
+
+
+// Ubuntu VM in spoke
+var nicNameUbuntuHdiSpoke = format('nicubuntuHdiSpoke{0}', networkAddrB)
+resource networkInterfaceUbuntuHdiSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: nicNameUbuntuHdiSpoke
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfig-ubuntu-HdiSpoke{0}', networkAddrB)
+        properties: {
+          privateIPAllocationMethod: 'Dynamic'
+          subnet: {
+            id: defaultSubnet.id
+          }
+        }
+      }
+    ]
+  }
+}
+
+param adminPublicKey string
+var vmNameUbuntuHdiSpoke = format('ubuazspoke{0}', networkAddrB)
+resource vmUbuntuHdiSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+  name: vmNameUbuntuHdiSpoke
+  location: location
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_D2s_v3'
+    }
+    osProfile: {
+      computerName: vmNameUbuntuHdiSpoke
+      adminUsername: adminUserName
+      linuxConfiguration: {
+        disablePasswordAuthentication: true
+        ssh: {
+          publicKeys: [
+            {
+              path: format('/home/{0}/.ssh/authorized_keys', adminUserName)
+              keyData: adminPublicKey
+            }
+          ]
+        }
+      }
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'Canonical'
+        offer: 'UbuntuServer'
+        sku: '18_04-lts-gen2'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+      }
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: networkInterfaceUbuntuHdiSpoke.id
+        }
+      ]
+    }
+  }
+}
+
+resource extensionBaseUbuntuHdiSpoke 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: format('{0}/extensionBase', vmUbuntuHdiSpoke.name)
+  location: location
+  properties: {
+    publisher: 'Microsoft.Azure.Extensions'
+    type: 'CustomScript'
+    typeHandlerVersion: '2.1'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/shoshii/armtemp/master/tmpls/bin/deploy_ubuntu.sh'
+      ]
+      commandToExecute: 'sh deploy_ubuntu.sh'
+    }
+  }
+}
+
+resource storageaccount 'Microsoft.Storage/storageAccounts@2021-09-01' = {
+  name: clusterName
+  location: location
+  kind: 'StorageV2'
+  sku: {
+    name: 'Premium_LRS'
+  }
+}
+
+/*
 resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
   name: clusterName
   location: location
@@ -224,3 +332,4 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
     }
   }
 }
+*/
