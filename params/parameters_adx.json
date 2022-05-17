@@ -1,0 +1,92 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "dnsLabelPrefix": {
+            "value": "shoshiidnsprefix"
+        },
+        "adminUserName": {
+            "value": "shoshii"
+        },
+        "adminUserPassword": {
+            "reference": {
+                "keyVault": {
+                    "id": "/subscriptions/1df70718-ea52-4ecb-bb7f-5f45708a2e1f/resourceGroups/rg-keyvault/providers/Microsoft.KeyVault/vaults/shogohoshiikeyvault"
+                },
+                "secretName": "adminUserPassword"
+            }
+        },
+        "adminPublicKey": {
+            "reference": {
+                "keyVault": {
+                    "id": "/subscriptions/1df70718-ea52-4ecb-bb7f-5f45708a2e1f/resourceGroups/rg-keyvault/providers/Microsoft.KeyVault/vaults/shogohoshiikeyvault"
+                },
+                "secretName": "adminPublicKey"
+            }
+        },
+        "sharedKeyForVPN": {
+            "reference": {
+                "keyVault": {
+                    "id": "/subscriptions/1df70718-ea52-4ecb-bb7f-5f45708a2e1f/resourceGroups/rg-keyvault/providers/Microsoft.KeyVault/vaults/shogohoshiikeyvault"
+                },
+                "secretName": "sharedKeyForVPN"
+            }
+        },
+        "clientIp": {
+            "reference": {
+                "keyVault": {
+                    "id": "/subscriptions/1df70718-ea52-4ecb-bb7f-5f45708a2e1f/resourceGroups/rg-keyvault/providers/Microsoft.KeyVault/vaults/shogohoshiikeyvault"
+                },
+                "secretName": "clientIp"
+            }
+        },
+        "aadLogin1Fqdn": {
+            "value": "login.microsoftonline.com"
+        },
+        "aadLogin2Fqdn": {
+            "value": "login.microsoft.com"
+        },
+        "aadGraph1Fqdn": {
+            "value": "graph.windows.net"
+        },
+        "aadGraph2Fqdn": {
+            "value": "graph.microsoft.com"
+        },
+        "aadGraphPpeFqdn": {
+            "value": "graph.microsoft-ppe.com"
+        },
+        "monitorProdWarmpathFqdn": {
+            "value": "prod.warmpath.msftcloudes.com"
+        },
+        "monitorGcsProdFqdn": {
+            "value": "gcs.prod.monitoring.core.windows.net"
+        },
+        "monitorProdDiagnosticsFqdn": {
+            "value": "production.diagnostics.monitoring.core.windows.net"
+        },
+        "monitorShoeboxFqdn": {
+            "value": "shoebox2.metrics.nsatc.net"
+        },
+        "caMsOcspFqdn": {
+            "value": "ocsp.msocsp.com"
+        },
+        "caDigicertOcspFqdn": {
+            "value": "ocsp.digicert.com"
+        },
+        "caDigicertCrlFqdn": {
+            "value": "crl3.digicert.com"
+        },
+        "caMsCrlFqdn": {
+            "value": "crl.microsoft.com"
+        },
+        "caMsFqdn": {
+            "value": "www.microsoft.com"
+        },
+        "storageFqdn": {
+            "value": "*.core.windows.net"
+        },
+        "keyVaultFqdn": {
+            "value": "*.vault.azure.net"
+        }
+    }
+  }
