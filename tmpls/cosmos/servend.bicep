@@ -151,7 +151,7 @@ resource ubuntuVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     networkInterface
   ]
 }
-
+/*
 resource extensionBase 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', ubuntuVM.name)
   location: location
@@ -168,6 +168,7 @@ resource extensionBase 'Microsoft.Compute/virtualMachines/extensions@2021-11-01'
     }
   }
 }
+*/
 
 // cosmos
 var accountName = format('sql{0}{1}', uniqueString(resourceGroup().id), networkAddrB)

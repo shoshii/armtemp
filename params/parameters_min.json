@@ -8,14 +8,6 @@
         "adminUserName": {
             "value": "shoshii"
         },
-        "adminPublicKey": {
-            "reference": {
-                "keyVault": {
-                    "id": "/subscriptions/1df70718-ea52-4ecb-bb7f-5f45708a2e1f/resourceGroups/rg-keyvault/providers/Microsoft.KeyVault/vaults/shogohoshiikeyvault"
-                },
-                "secretName": "adminPublicKey"
-            }
-        },
         "adminUserPassword": {
             "reference": {
                 "keyVault": {

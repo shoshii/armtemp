@@ -5,3 +5,5 @@ Set-Service -name W3SVC -startupType Automatic
 
 Install-WindowsFeature -name RemoteAccess -IncludeManagementTools
 Install-WindowsFeature -name Routing -IncludeManagementTools
+
+Install-Module AzureAD

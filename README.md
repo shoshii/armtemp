@@ -61,7 +61,9 @@ $ misc/get_adx_dependencies.ps1 <subscription id> <adx cluster name> <resource g
 - [Cosmos プライベート エンドポイント サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.documentdb/cosmosdb-private-endpoint/main.bicep)
 - [SQL Server Managed Instance サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/demos/azure-sql-managed-instance/azuredeploy.json)
 - [HDInsight サンプル](https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.hdinsight/hdinsight-datalake-store-azure-storage/azuredeploy.json)
+- [HDI パブリックアクセス制限サンプル](https://github.com/Azure-Samples/hdinsight-enterprise-security/tree/main/ESP-HIB-PL-Template)
 - [Data Lake Gen2 サンプル](https://gist.github.com/dazfuller/0740f1640225dc8ea0eb29a8e6f88a6a)
+- [Role Assign サンプル](https://docs.microsoft.com/ja-jp/azure/role-based-access-control/role-assignments-template)
 
 ### 基本知識
 
@@ -72,6 +74,9 @@ $ misc/get_adx_dependencies.ps1 <subscription id> <adx cluster name> <resource g
 - [Azure CLI で ARM のデプロイテンプレートを使用する方法](https://docs.microsoft.com/ja-jp/azure/azure-resource-manager/templates/deploy-cli)
 - [Azure CLI でサインインする](https://docs.microsoft.com/ja-jp/cli/azure/authenticate-azure-cli)
 - [Azure CLI でサブスクリプションを管理する](https://docs.microsoft.com/ja-jp/cli/azure/manage-azure-subscriptions-azure-cli)
+
+#### RBAC
+- [Role Assign の基本知識](https://docs.microsoft.com/en-us/azure/azure-resource-manager/bicep/scenarios-rbac)
 
 #### ネットワーク
 - [プライベート エンドポイント ネットワーク ポリシー](https://docs.microsoft.com/ja-jp/azure/private-link/disable-private-endpoint-network-policy)

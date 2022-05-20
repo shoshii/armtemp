@@ -601,7 +601,108 @@ resource vpnVnetConnection 'Microsoft.Network/connections@2020-11-01' = {
   }
 }
 
-/*
+// vnet peering between hub and spoke
+resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkAzureSpoke.name)
+  dependsOn: [
+    vpnVnetConnection
+  ]
+  properties: {
+    allowVirtualNetworkAccess: true
+    allowForwardedTraffic: true
+    allowGatewayTransit: true
+    useRemoteGateways: false
+    remoteVirtualNetwork: {
+      id: virtualNetworkAzureSpoke.id
+    }
+  }
+}
+resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureSpoke.name, virtualNetworkAzureSpoke.name, virtualNetworkAzureHub.name)
+  dependsOn: [
+    peeringSpoke
+  ]
+  properties: {
+    allowVirtualNetworkAccess: true
+    allowForwardedTraffic: true
+    allowGatewayTransit: false
+    useRemoteGateways: true
+    remoteVirtualNetwork: {
+      id: virtualNetworkAzureHub.id
+    }
+  }
+}
+
+// vnet peering between hub and adx spoke
+resource peeringAdxSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkAdxSpoke.name)
+  dependsOn: [
+    peeringHub
+  ]
+  properties: {
+    allowVirtualNetworkAccess: true
+    allowForwardedTraffic: true
+    allowGatewayTransit: true
+    useRemoteGateways: false
+    remoteVirtualNetwork: {
+      id: virtualNetworkAdxSpoke.id
+    }
+  }
+}
+resource peeringHubAdx 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkAdxSpoke.name, virtualNetworkAdxSpoke.name, virtualNetworkAzureHub.name)
+  dependsOn: [
+    peeringAdxSpoke
+  ]
+  properties: {
+    allowVirtualNetworkAccess: true
+    allowForwardedTraffic: true
+    allowGatewayTransit: false
+    useRemoteGateways: true
+    remoteVirtualNetwork: {
+      id: virtualNetworkAzureHub.id
+    }
+  }
+}
+
+
+// Bastion
+var pipNameBastionHost = format('pip-bastion-host{0}', networkAddrB)
+resource publicIPAddressBastionHost 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
+  name: pipNameBastionHost
+  location: location
+  dependsOn: [
+    peeringHubAdx
+  ]
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    publicIPAllocationMethod: 'Static'
+  }
+}
+
+var bastionHostName = format('bastionhost-{0}', networkAddrB)
+resource bastionHost 'Microsoft.Network/bastionHosts@2021-05-01' = {
+  name: bastionHostName
+  location: location
+  properties: {
+    ipConfigurations: [
+      {
+        name: format('ipconfbastion{0}', networkAddrB)
+        properties: {
+          subnet: {
+            id: subnetBastion.id
+          }
+          publicIPAddress: {
+            id: publicIPAddressBastionHost.id
+          }
+        }
+      }
+    ]
+  }
+}
+
 // Azure Firewall
 var ipgroupNameAzureSpoke = format('ipgroup-spoke-{0}-{1}', uniqueString(resourceGroup().id), networkAddrB)
 resource ipgroupAzureSpoke 'Microsoft.Network/ipGroups@2021-05-01' = {
@@ -661,28 +762,7 @@ resource publicIPAddressHubFirewalls 'Microsoft.Network/publicIPAddresses@2021-0
     }
   }
 }]
-var firewallIpConfigurationPrimal = array({
-  name: format('ipconfigfirewall{0}{1}', networkAddrB, 0)
-  properties: {
-    subnet: {
-      id: subnetAzureHubFirewall.id
-    }
-    publicIPAddress: {
-      id: publicIPAddressHubFirewalls[0].id
-    }
-  }
-})
-var firewallIpConfigurationOthers = [for idx in range(1, 2): {
-  name: format('ipconfigfirewall{0}{1}', networkAddrB, idx)
-  properties: {
-    subnet: null
-    publicIPAddress: {
-      id: publicIPAddressHubFirewalls[idx].id
-    }
-  }
-}]
-var firewallIpConfigurations = concat(firewallIpConfigurationPrimal, firewallIpConfigurationOthers)
-//var firewallIpConfigurations = firewallIpConfigurationPrimal
+
 var nameFirewall = format('hubfirewall{0}', networkAddrB)
 var nameFirewallPolicy = format('{0}-policy', nameFirewall)
 resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = {
@@ -1013,15 +1093,32 @@ resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollecti
     ]
   }
 }
-
+/*
+var firewallIpConfigurationPrimal = array({
+  name: format('ipconfigfirewall{0}{1}', networkAddrB, 0)
+  properties: {
+    subnet: {
+      id: subnetAzureHubFirewall.id
+    }
+    publicIPAddress: {
+      id: publicIPAddressHubFirewalls[0].id
+    }
+  }
+})
+var firewallIpConfigurationOthers = [for idx in range(1, 2): {
+  name: format('ipconfigfirewall{0}{1}', networkAddrB, idx)
+  properties: {
+    subnet: null
+    publicIPAddress: {
+      id: publicIPAddressHubFirewalls[idx].id
+    }
+  }
+}]
+var firewallIpConfigurations = concat(firewallIpConfigurationPrimal, firewallIpConfigurationOthers)
 resource firewall 'Microsoft.Network/azureFirewalls@2021-05-01' = {
   name: nameFirewall
   location: location
   dependsOn: [
-    virtualNetworkAzureHub
-    ipgroupAzureSpoke
-    ipgroupAdx
-    nwRuleCollectionGroup
     appRuleCollectionGroup
   ]
   properties: {
@@ -1033,113 +1130,6 @@ resource firewall 'Microsoft.Network/azureFirewalls@2021-05-01' = {
 }
 */
 
-// Bastion
-/*
-var pipNameBastionHost = format('pip-bastion-host{0}', networkAddrB)
-resource publicIPAddressBastionHost 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
-  name: pipNameBastionHost
-  location: location
-  dependsOn: [
-    firewall
-  ]
-  sku: {
-    name: 'Standard'
-  }
-  properties: {
-    publicIPAllocationMethod: 'Static'
-  }
-}
-
-var bastionHostName = format('bastionhost-{0}', networkAddrB)
-resource bastionHost 'Microsoft.Network/bastionHosts@2021-05-01' = {
-  name: bastionHostName
-  location: location
-  dependsOn: [
-    virtualNetworkAzureHub
-  ]
-  properties: {
-    ipConfigurations: [
-      {
-        name: format('ipconfbastion{0}', networkAddrB)
-        properties: {
-          subnet: {
-            id: subnetBastion.id
-          }
-          publicIPAddress: {
-            id: publicIPAddressBastionHost.id
-          }
-        }
-      }
-    ]
-  }
-}
-*/
-// vnet peering between hub and spoke
-/*
-resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
-  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkAzureSpoke.name)
-  dependsOn: [
-    bastionHost
-  ]
-  properties: {
-    allowVirtualNetworkAccess: true
-    allowForwardedTraffic: true
-    allowGatewayTransit: true
-    useRemoteGateways: false
-    remoteVirtualNetwork: {
-      id: virtualNetworkAzureSpoke.id
-    }
-  }
-}
-resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
-  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureSpoke.name, virtualNetworkAzureSpoke.name, virtualNetworkAzureHub.name)
-  dependsOn: [
-    peeringSpoke
-  ]
-  properties: {
-    allowVirtualNetworkAccess: true
-    allowForwardedTraffic: true
-    allowGatewayTransit: false
-    useRemoteGateways: true
-    remoteVirtualNetwork: {
-      id: virtualNetworkAzureHub.id
-    }
-  }
-}
-*/
-// vnet peering between hub and adx spoke
-/*
-resource peeringAdxSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
-  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkAdxSpoke.name)
-  dependsOn: [
-    peeringHub
-  ]
-  properties: {
-    allowVirtualNetworkAccess: true
-    allowForwardedTraffic: true
-    allowGatewayTransit: true
-    useRemoteGateways: false
-    remoteVirtualNetwork: {
-      id: virtualNetworkAdxSpoke.id
-    }
-  }
-}
-resource peeringHubAdx 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
-  name: format('{0}/peering_{1}_{2}', virtualNetworkAdxSpoke.name, virtualNetworkAdxSpoke.name, virtualNetworkAzureHub.name)
-  dependsOn: [
-    peeringAdxSpoke
-  ]
-  properties: {
-    allowVirtualNetworkAccess: true
-    allowForwardedTraffic: true
-    allowGatewayTransit: false
-    useRemoteGateways: true
-    remoteVirtualNetwork: {
-      id: virtualNetworkAzureHub.id
-    }
-  }
-}
-*/
 param adminUserName string
 @secure()
 @minLength(12)
@@ -1147,7 +1137,6 @@ param adminUserPassword string
 param adminPublicKey string
 // VMs in hub network ===================================================================
 // VM in hub
-/*
 var nicNameWinAzureHub = format('nicwinazurehub{0}', networkAddrB)
 resource networkInterfaceWinAzureHub 'Microsoft.Network/networkInterfaces@2020-11-01' = {
   name: nicNameWinAzureHub
@@ -1282,9 +1271,6 @@ var vmNameWinAzureSpoke = format('winazspoke{0}', networkAddrB)
 resource vmWinAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameWinAzureSpoke
   location: location
-  dependsOn: [
-    vmWinAzureHub
-  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1385,9 +1371,6 @@ var vmNameDsAzureSpoke = format('dsazspoke{0}', networkAddrB)
 resource vmDsAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameDsAzureSpoke
   location: location
-  dependsOn: [
-    vmWinAzureSpoke
-  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1474,14 +1457,10 @@ resource networkInterfaceUbuntuAzureSpoke 'Microsoft.Network/networkInterfaces@2
   ]
 }
 
-param adminPublicKey string
 var vmNameUbuntuAzureSpoke = format('ubuazspoke{0}', networkAddrB)
 resource vmUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameUbuntuAzureSpoke
   location: location
-  dependsOn: [
-    vmDsAzureSpoke
-  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1521,7 +1500,7 @@ resource vmUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/*
 resource extensionBaseUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmUbuntuAzureSpoke.name)
   location: location
@@ -1538,8 +1517,8 @@ resource extensionBaseUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines/extens
     }
   }
 }
-
 */
+
 // VMs in onpremise ===================================================================
 // windows server VM in onpremise
 var pipNameWinOnprem = format('winsrv-onprem-pip-{0}', networkAddrB)
@@ -1652,7 +1631,7 @@ resource extensionBaseWinOnprem 'Microsoft.Compute/virtualMachines/extensions@20
     }
   }
 }
-/*
+
 // data science machine VM in onpremise
 var pipNameDsOnprem = format('dsvm-onprem-pip-{0}', networkAddrB)
 resource publicIPAddressDsOnprem 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
@@ -1705,9 +1684,6 @@ var vmNameDsOnprem = format('dsonprem{0}', networkAddrB)
 resource vmDsOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameDsOnprem
   location: location
-  dependsOn: [
-    vmWinOnprem
-  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1798,9 +1774,6 @@ var vmNameUbuntuOnprem = format('ubuonprem{0}', networkAddrB)
 resource vmUbuntuOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameUbuntuOnprem
   location: location
-  dependsOn: [
-    vmDsOnprem
-  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1857,7 +1830,7 @@ resource extensionBaseUbuntuOnprem 'Microsoft.Compute/virtualMachines/extensions
     }
   }
 }
-
+*/
 
 // SQL Server in onpremise
 var pipNameSqlOnprem = format('sql-onprem-pip-{0}', networkAddrB)
@@ -1911,9 +1884,6 @@ var vmNameSqlOnprem = format('sqlonprem{0}', networkAddrB)
 resource vmSqlOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameSqlOnprem
   location: location
-  dependsOn: [
-    vmUbuntuOnprem
-  ]
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_D2s_v3'
@@ -1978,4 +1948,3 @@ resource extensionBaseSqlOnprem 'Microsoft.Compute/virtualMachines/extensions@20
     }
   }
 }
-*/

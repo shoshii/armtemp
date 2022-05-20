@@ -61,6 +61,22 @@ resource networkSecurityGroupHdi 'Microsoft.Network/networkSecurityGroups@2019-1
         }
       }
       {
+        name: 'azure-dns-outbound'
+        properties: {
+          description: 'allow access to azure dns'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRanges: [
+            '53'
+          ]
+          sourceAddressPrefix: '*'
+          destinationAddressPrefix: '168.63.129.16'
+          access: 'Allow'
+          priority: 102
+          direction: 'Outbound'
+        }
+      }
+      {
         name: 'allowHttpsfromClient'
         properties: {
           description: 'allow Https from client'
@@ -109,9 +125,44 @@ resource networkSecurityGroupHdi 'Microsoft.Network/networkSecurityGroups@2019-1
   }
 }
 
+
+// need NAT or firewall solotion for outbound cluster to get public ip
+// https://docs.microsoft.com/en-us/azure/hdinsight/hdinsight-private-link#NATorFirewall
+resource publicIpPrefixes 'Microsoft.Network/publicIPPrefixes@2021-08-01' = {
+  name: format('hdi{0}', networkAddrB)
+  location: location
+  sku: {
+    name: 'Standard'
+    tier: 'Regional'
+  }
+  properties: {
+    prefixLength: 28
+    publicIPAddressVersion: 'IPv4'
+  }
+}
+resource natGateway 'Microsoft.Network/natGateways@2021-08-01' = {
+  name: format('hdi{0}', networkAddrB)
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    idleTimeoutInMinutes: 4
+    publicIpPrefixes: [
+      {
+        id: publicIpPrefixes.id
+      }
+    ]
+  }
+}
+
+
 resource virtualNetworkHdiSpoke 'Microsoft.Network/virtualNetworks@2020-05-01' = {
   location: location
   name: hdiVnetName
+  dependsOn: [
+    natGateway
+  ]
   properties: {
     addressSpace: {
       addressPrefixes: [
@@ -131,6 +182,9 @@ resource hdiSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
       id: networkSecurityGroupHdi.id
     }
     privateLinkServiceNetworkPolicies: 'Disabled'
+    natGateway: {
+      id: natGateway.id
+    }
   }
 }
 
@@ -160,14 +214,6 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' = {
     networkAcls: {
       defaultAction: 'Deny'
       bypass: 'AzureServices'
-      /*
-      virtualNetworkRules: [
-        {
-          action: 'Allow'
-          id: hdiSubnet.id
-        }
-      ]
-      */
     }
   }
 }
@@ -188,17 +234,52 @@ resource assignedToStorage 'Microsoft.Authorization/roleAssignments@2020-10-01-p
   }
 }
 
+resource privateEndpointPrimaryStorageBlob 'Microsoft.Network/privateEndpoints@2020-07-01' = {
+  name: format('pend-hdi-storage-blob{0}', networkAddrB)
+  location: location
+  properties: {
+    subnet: {
+      id: resourceId('Microsoft.Network/VirtualNetworks/subnets', virtualNetworkHdiSpoke.name, hdiSubnet.name)
+    }
+    privateLinkServiceConnections: [
+      {
+        name: format('plink-service-blob-{0}-{1}', storageAccount.name, networkAddrB)
+        properties: {
+          privateLinkServiceId: storageAccount.id
+          groupIds: [
+            'blob'
+          ]
+        }
+      }
+    ]
+  }
+}
+
+resource privateEndpointPrimaryStorageDfs 'Microsoft.Network/privateEndpoints@2020-07-01' = {
+  name: format('pend-hdi-storage-dfs{0}', networkAddrB)
+  location: location
+  properties: {
+    subnet: {
+      id: resourceId('Microsoft.Network/VirtualNetworks/subnets', virtualNetworkHdiSpoke.name, hdiSubnet.name)
+    }
+    privateLinkServiceConnections: [
+      {
+        name: format('plink-service-dfs-{0}-{1}', storageAccount.name, networkAddrB)
+        properties: {
+          privateLinkServiceId: storageAccount.id
+          groupIds: [
+            'dfs'
+          ]
+        }
+      }
+    ]
+  }
+}
 
 /*
 resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
   name: clusterName
   location: location
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      id: userAssignedManagedId
-    }
-  }
   properties: {
     clusterVersion: '4.0'
     osType: 'Linux'
@@ -241,7 +322,7 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
           }
           virtualNetworkProfile: {
             id: virtualNetworkHdiSpoke.id
-            subnet: hdiSubnet.id
+            subnet: hdiPublicSubnet.id
           }
         }
         {
@@ -258,7 +339,7 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
           }
           virtualNetworkProfile: {
             id: virtualNetworkHdiSpoke.id
-            subnet: hdiSubnet.id
+            subnet: hdiPublicSubnet.id
           }
         }
         {
@@ -278,8 +359,9 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
     }
   }
 }
-
 */
+
+
 param adminUserName string
 @secure()
 @minLength(12)
