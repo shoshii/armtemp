@@ -19,7 +19,7 @@ param vnetCidrHdi string = format('10.{0}.0.0/16', networkAddrB)
 param hdiVnetName string = format('hdi-vnet-{0}', networkAddrB)
 
 @description('The name of the Azure Data Explorer Cluster to create.')
-param clusterName string = format('hdi{0}{1}', dnsLabelPrefix, networkAddrB)
+param clusterName string = format('hdi{0}{1}{2}', dnsLabelPrefix, networkAddrB, resourceGroup().name)
 
 var defaultSubnetName = 'default-subnet'
 var subnetCidrDefault = format('10.{0}.16.0/20', networkAddrB)
@@ -155,6 +155,10 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' = {
   sku: {
     name: 'Standard_LRS'
   }
+  dependsOn: [
+    networkInterfaceUbuntuHdiSpoke
+    networkInterfaceWinAzureSpoke
+  ]
   properties: {
     isHnsEnabled: true
     networkAcls: {
@@ -165,6 +169,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' = {
         {
           action: 'Allow'
           id: hdiSubnet.id
+          state: 'Succeeded'
         }
       ]
       */
@@ -173,7 +178,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' = {
 }
 
 resource userAssignedManagedId 'Microsoft.ManagedIdentity/userAssignedIdentities@2021-09-30-preview' = {
-  name: format('{0}umid{1}', dnsLabelPrefix, networkAddrB)
+  name: format('{0}umid{1}{2}', dnsLabelPrefix, networkAddrB, resourceGroup().name)
   location: location
 }
 
@@ -189,7 +194,7 @@ resource assignedToStorage 'Microsoft.Authorization/roleAssignments@2020-10-01-p
 }
 
 
-/*
+
 resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
   name: clusterName
   location: location
@@ -217,12 +222,7 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
     }
     storageProfile: {
       storageaccounts: [
-        {
-          name: replace(replace(concat(reference(storageAccount.id, '2021-08-01').primaryEndpoints.blob), 'https:', ''), '/', '')
-          isDefault: true
-          container: clusterName
-          key: listKeys(storageAccount.id, '2021-08-01').keys[0].value
-        }
+        storageAccount
       ]
     }
     computeProfile: {
@@ -279,7 +279,7 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
   }
 }
 
-*/
+
 param adminUserName string
 @secure()
 @minLength(12)
@@ -476,7 +476,7 @@ resource vmWinAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/* 
 resource extensionBaseA 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmWinAzureSpoke.name)
   location: location
@@ -493,3 +493,4 @@ resource extensionBaseA 'Microsoft.Compute/virtualMachines/extensions@2021-11-01
     }
   }
 }
+ */

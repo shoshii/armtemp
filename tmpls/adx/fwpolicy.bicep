@@ -9,7 +9,6 @@ var subnetCidrAzureSpoke = format('10.{0}.0.0/24', int(networkAddrB) + 1)
 
 var subnetCidrOnprem = format('172.{0}.0.0/24', networkAddrB)
 
-var nsgName = format('common-nsg-{0}', networkAddrB)
 param clientIp string
 
 // adx params ------------------------------------------------------------------------------------------------
@@ -238,57 +237,6 @@ resource routeTableAdx 'Microsoft.Network/routeTables@2019-11-01' = {
 }
 
 // other resources ---------------------------------------------------------------------
-resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
-  name: nsgName
-  location: location
-  properties: {
-    securityRules: [
-      {
-        name: 'allowRDPfromClient'
-        properties: {
-          description: 'allow RDP from client'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          destinationPortRange: '3389'
-          sourceAddressPrefix: clientIp
-          destinationAddressPrefix: '*'
-          access: 'Allow'
-          priority: 300
-          direction: 'Inbound'
-        }
-      }
-      {
-        name: 'allowSSHfromClient'
-        properties: {
-          description: 'allow SSH from client'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          destinationPortRange: '22'
-          sourceAddressPrefix: clientIp
-          destinationAddressPrefix: '*'
-          access: 'Allow'
-          priority: 310
-          direction: 'Inbound'
-        }
-      }
-      {
-        name: 'allowHttpInbound'
-        properties: {
-          description: 'allow http inbound'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          destinationPortRange: '80'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: '*'
-          access: 'Allow'
-          priority: 320
-          direction: 'Inbound'
-        }
-      }
-    ]
-  }
-}
-
 // Azure Firewall
 var ipgroupNameAzureSpoke = format('ipgroup-spoke-{0}-{1}', uniqueString(resourceGroup().id), networkAddrB)
 resource ipgroupAzureSpoke 'Microsoft.Network/ipGroups@2021-05-01' = {

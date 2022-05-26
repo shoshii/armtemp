@@ -18,8 +18,8 @@ param vnetCidrHdi string = format('10.{0}.0.0/16', networkAddrB)
 @description('The name of the virtual network to create.')
 param hdiVnetName string = format('hdi-vnet-{0}', networkAddrB)
 
-@description('The name of the Azure Data Explorer Cluster to create.')
-param clusterName string = format('hdi{0}{1}', dnsLabelPrefix, networkAddrB)
+@description('The name of the HDI Cluster to create.')
+param clusterName string = format('hdi{0}{1}{2}', dnsLabelPrefix, networkAddrB, resourceGroup().name)
 
 var defaultSubnetName = 'default-subnet'
 var subnetCidrDefault = format('10.{0}.16.0/20', networkAddrB)
@@ -219,7 +219,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' = {
 }
 
 resource userAssignedManagedId 'Microsoft.ManagedIdentity/userAssignedIdentities@2021-09-30-preview' = {
-  name: format('{0}umid{1}', dnsLabelPrefix, networkAddrB)
+  name: format('{0}umid{1}{2}', dnsLabelPrefix, networkAddrB, resourceGroup().name)
   location: location
 }
 
@@ -275,8 +275,73 @@ resource privateEndpointPrimaryStorageDfs 'Microsoft.Network/privateEndpoints@20
     ]
   }
 }
+resource vnetLinkBlob 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  name: format('{0}/vnetlinkblob{1}', privateDnsZoneBlob.name, networkAddrB)
+  location: 'global'
+  properties: {
+    virtualNetwork: {
+      id: virtualNetworkHdiSpoke.id
+    }
+    registrationEnabled: false
+  }
+}
 
-/*
+resource privateDnsZoneBlob 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  //name: format('privatelink{0}.blob.core.windows.net', networkAddrB)
+  name: 'privatelink.blob.core.windows.net'
+  location: 'global'
+  dependsOn: [
+    virtualNetworkHdiSpoke
+  ]
+}
+
+resource privateDnsBlobRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = {
+  parent: privateDnsZoneBlob
+  name: storageAccount.name
+  properties: {
+    ttl: 3600
+    aRecords: [
+      {
+        ipv4Address: first(first(privateEndpointPrimaryStorageBlob.properties.customDnsConfigs).ipAddresses)
+      }
+    ]
+  }
+}
+
+resource vnetLinkDfs 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  name: format('{0}/vnetlinkdfs{1}', privateDnsZoneDfs.name, networkAddrB)
+  location: 'global'
+  properties: {
+    virtualNetwork: {
+      id: virtualNetworkHdiSpoke.id
+    }
+    registrationEnabled: false
+  }
+}
+
+resource privateDnsZoneDfs 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  //name: format('privatelink{0}.dfs.core.windows.net', networkAddrB)
+  name: 'privatelink.dfs.core.windows.net'
+  location: 'global'
+  dependsOn: [
+    virtualNetworkHdiSpoke
+  ]
+}
+
+resource privateDnsDfsRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = {
+  parent: privateDnsZoneDfs
+  name: storageAccount.name
+  properties: {
+    ttl: 3600
+    aRecords: [
+      {
+        ipv4Address: first(first(privateEndpointPrimaryStorageDfs.properties.customDnsConfigs).ipAddresses)
+      }
+    ]
+  }
+}
+
+
 resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
   name: clusterName
   location: location
@@ -298,12 +363,7 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
     }
     storageProfile: {
       storageaccounts: [
-        {
-          name: replace(replace(concat(reference(storageAccount.id, '2021-08-01').primaryEndpoints.blob), 'https:', ''), '/', '')
-          isDefault: true
-          container: clusterName
-          key: listKeys(storageAccount.id, '2021-08-01').keys[0].value
-        }
+        storageAccount
       ]
     }
     computeProfile: {
@@ -322,7 +382,7 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
           }
           virtualNetworkProfile: {
             id: virtualNetworkHdiSpoke.id
-            subnet: hdiPublicSubnet.id
+            subnet: hdiSubnet.id
           }
         }
         {
@@ -339,7 +399,7 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
           }
           virtualNetworkProfile: {
             id: virtualNetworkHdiSpoke.id
-            subnet: hdiPublicSubnet.id
+            subnet: hdiSubnet.id
           }
         }
         {
@@ -359,7 +419,7 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
     }
   }
 }
-*/
+
 
 
 param adminUserName string
@@ -558,7 +618,7 @@ resource vmWinAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/*
 resource extensionBaseA 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmWinAzureSpoke.name)
   location: location
@@ -575,3 +635,4 @@ resource extensionBaseA 'Microsoft.Compute/virtualMachines/extensions@2021-11-01
     }
   }
 }
+*/

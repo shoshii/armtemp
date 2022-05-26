@@ -1218,7 +1218,7 @@ resource vmWinAzureHub 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/* 
 resource extensionBaseAzureHub 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmWinAzureHub.name)
   location: location
@@ -1234,7 +1234,7 @@ resource extensionBaseAzureHub 'Microsoft.Compute/virtualMachines/extensions@202
       commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_win.ps1'
     }
   }
-}
+} */
 
 
 // Windows Server VM in spoke
@@ -1316,7 +1316,7 @@ resource vmWinAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/* 
 resource extensionBaseA 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmWinAzureSpoke.name)
   location: location
@@ -1332,7 +1332,7 @@ resource extensionBaseA 'Microsoft.Compute/virtualMachines/extensions@2021-11-01
       commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_win.ps1'
     }
   }
-}
+} */
 
 // Data Science VM in spoke
 var nicNameDsAzureSpoke = format('nicdsvmazurespoke{0}', networkAddrB)
@@ -1416,7 +1416,7 @@ resource vmDsAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/* 
 resource extensionBaseDsAzureSpoke 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmDsAzureSpoke.name)
   location: location
@@ -1432,7 +1432,7 @@ resource extensionBaseDsAzureSpoke 'Microsoft.Compute/virtualMachines/extensions
       commandToExecute: format('powershell.exe -ExecutionPolicy Unrestricted -File script_dsvm.ps1 {0}', adminUserName)
     }
   }
-}
+} */
 
 // Ubuntu VM in spoke
 var nicNameUbuntuAzureSpoke = format('nicubuntuazurespoke{0}', networkAddrB)
@@ -1614,7 +1614,7 @@ resource vmWinOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/* 
 resource extensionBaseWinOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmWinOnprem.name)
   location: location
@@ -1631,7 +1631,7 @@ resource extensionBaseWinOnprem 'Microsoft.Compute/virtualMachines/extensions@20
     }
   }
 }
-
+ */
 // data science machine VM in onpremise
 var pipNameDsOnprem = format('dsvm-onprem-pip-{0}', networkAddrB)
 resource publicIPAddressDsOnprem 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
@@ -1729,7 +1729,7 @@ resource vmDsOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/* 
 resource extensionBaseDsOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmDsOnprem.name)
   location: location
@@ -1746,7 +1746,7 @@ resource extensionBaseDsOnprem 'Microsoft.Compute/virtualMachines/extensions@202
     }
   }
 }
-
+ */
 // Ubuntu VM in onpremise
 var nicNameUbuntuOnprem = format('nicubuntuonprem{0}', networkAddrB)
 resource networkInterfaceUbuntuOnprem 'Microsoft.Network/networkInterfaces@2020-11-01' = {
