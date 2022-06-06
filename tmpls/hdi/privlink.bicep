@@ -341,7 +341,7 @@ resource privateDnsDfsRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = 
   }
 }
 
-
+/*
 resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
   name: clusterName
   location: location
@@ -419,7 +419,7 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
     }
   }
 }
-
+*/
 
 
 param adminUserName string

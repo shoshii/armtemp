@@ -204,7 +204,7 @@ resource virtualNetworkDbrSpoke 'Microsoft.Network/virtualNetworks@2020-05-01' =
   }
 }
 
-resource dbrPublicSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource dbrPublicSubnet 'Microsoft.Network/virtualNetworks/subnets@2020-05-01' = {
   name: dbrPublicSubnetName
   parent: virtualNetworkDbrSpoke
   properties: {
@@ -223,7 +223,7 @@ resource dbrPublicSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' 
   }
 }
 
-resource dbrPrivateSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource dbrPrivateSubnet 'Microsoft.Network/virtualNetworks/subnets@2020-05-01' = {
   name: dbrPrivateSubnetName
   parent: virtualNetworkDbrSpoke
   properties: {
@@ -345,7 +345,7 @@ resource virtualNetworkAzureHub 'Microsoft.Network/virtualNetworks@2019-11-01' =
 }
 
 var subnetNameFirewall = 'AzureFirewallSubnet'
-resource subnetAzureHubFirewall 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource subnetAzureHubFirewall 'Microsoft.Network/virtualNetworks/subnets@2020-05-01' = {
   name: subnetNameFirewall
   parent: virtualNetworkAzureHub
   properties: {
@@ -354,7 +354,7 @@ resource subnetAzureHubFirewall 'Microsoft.Network/virtualNetworks/subnets@2021-
 }
 
 var subnetGwName = 'GatewaySubnet'
-resource gwSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource gwSubnet 'Microsoft.Network/virtualNetworks/subnets@2020-05-01' = {
   parent: virtualNetworkAzureHub
   name: subnetGwName
   properties: {
@@ -366,7 +366,7 @@ resource gwSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
 }
 
 var subnetBastionName = 'AzureBastionSubnet'
-resource subnetBastion 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource subnetBastion 'Microsoft.Network/virtualNetworks/subnets@2020-05-01' = {
   parent: virtualNetworkAzureHub
   name: subnetBastionName
   properties: {
@@ -378,7 +378,7 @@ resource subnetBastion 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = 
 }
 
 var subnetNameDefault = format('azure-hub-default{0}', networkAddrB)
-resource subnetAzureHubDefault 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource subnetAzureHubDefault 'Microsoft.Network/virtualNetworks/subnets@2020-05-01' = {
   parent: virtualNetworkAzureHub
   name: subnetNameDefault
   properties: {
@@ -467,7 +467,7 @@ resource virtualNetworkOnprem 'Microsoft.Network/virtualNetworks@2019-11-01' = {
 }
 
 var subnetNameOnprem = 'default-onprem'
-resource subnetOnprem 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource subnetOnprem 'Microsoft.Network/virtualNetworks/subnets@2020-05-01' = {
   name: subnetNameOnprem
   parent: virtualNetworkOnprem
   properties: {
@@ -492,7 +492,7 @@ resource virtualNetworkAzureSpoke 'Microsoft.Network/virtualNetworks@2019-11-01'
 }
 
 var subnetNameAzureSpoke = 'default-azurespoke'
-resource subnetAzureSpoke 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource subnetAzureSpoke 'Microsoft.Network/virtualNetworks/subnets@2020-05-01' = {
   name: subnetNameAzureSpoke
   parent: virtualNetworkAzureSpoke
   properties: {
@@ -691,9 +691,6 @@ resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = {
   properties: {
     dnsSettings: {
       enableProxy: true
-      servers: [
-        format('{0}.4', subnetFirewall)
-      ]
     }
     threatIntelMode: 'Alert'
   }
@@ -1242,7 +1239,7 @@ resource vmWinAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/*
 resource extensionBaseA 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmWinAzureSpoke.name)
   location: location
@@ -1259,7 +1256,7 @@ resource extensionBaseA 'Microsoft.Compute/virtualMachines/extensions@2021-11-01
     }
   }
 }
-
+*/
 // Data Science VM in spoke
 var nicNameDsAzureSpoke = format('nicdsvmazurespoke{0}', networkAddrB)
 resource networkInterfaceDsAzureSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
@@ -1343,7 +1340,7 @@ resource vmDsAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/* 
 resource extensionBaseDsAzureSpoke 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmDsAzureSpoke.name)
   location: location
@@ -1360,7 +1357,7 @@ resource extensionBaseDsAzureSpoke 'Microsoft.Compute/virtualMachines/extensions
     }
   }
 }
-
+ */
 // Ubuntu VM in spoke
 var nicNameUbuntuAzureSpoke = format('nicubuntuazurespoke{0}', networkAddrB)
 resource networkInterfaceUbuntuAzureSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
@@ -1429,7 +1426,7 @@ resource vmUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/* 
 resource extensionBaseUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmUbuntuAzureSpoke.name)
   location: location
@@ -1445,7 +1442,7 @@ resource extensionBaseUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines/extens
       commandToExecute: 'sh deploy_ubuntu.sh'
     }
   }
-}
+} */
 
 // VMs in hub network ===================================================================
 // VM in hub
@@ -1535,7 +1532,7 @@ resource vmWinAzureHub 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     vmWinAzureSpoke
   ]
 }
-
+/* 
 resource extensionBaseAzureHub 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmWinAzureHub.name)
   location: location
@@ -1552,7 +1549,7 @@ resource extensionBaseAzureHub 'Microsoft.Compute/virtualMachines/extensions@202
     }
   }
 }
-
+ */
 // VMs in onpremise ===================================================================
 // windows server VM in onpremise
 var pipNameWinOnprem = format('winsrv-onprem-pip-{0}', networkAddrB)
@@ -1654,7 +1651,7 @@ resource vmWinOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     vmWinAzureHub
   ]
 }
-
+/* 
 resource extensionBaseWinOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmWinOnprem.name)
   location: location
@@ -1670,7 +1667,7 @@ resource extensionBaseWinOnprem 'Microsoft.Compute/virtualMachines/extensions@20
       commandToExecute: 'powershell.exe -ExecutionPolicy Unrestricted -File script_win.ps1'
     }
   }
-}
+} */
 
 // data science machine VM in onpremise
 var pipNameDsOnprem = format('dsvm-onprem-pip-{0}', networkAddrB)
@@ -1773,7 +1770,7 @@ resource vmDsOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     vmWinOnprem
   ]
 }
-
+/* 
 resource extensionBaseDsOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmDsOnprem.name)
   location: location
@@ -1789,7 +1786,7 @@ resource extensionBaseDsOnprem 'Microsoft.Compute/virtualMachines/extensions@202
       commandToExecute: format('powershell.exe -ExecutionPolicy Unrestricted -File script_dsvm.ps1 {0}', adminUserName)
     }
   }
-}
+} */
 
 // Ubuntu VM in onpremise
 var nicNameUbuntuOnprem = format('nicubuntuonprem{0}', networkAddrB)
@@ -1858,7 +1855,7 @@ resource vmUbuntuOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/* 
 resource extensionBaseUbuntuOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmUbuntuOnprem.name)
   location: location
@@ -1874,7 +1871,7 @@ resource extensionBaseUbuntuOnprem 'Microsoft.Compute/virtualMachines/extensions
       commandToExecute: 'sh deploy_ubuntu.sh'
     }
   }
-}
+} */
 
 // SQL Server in onpremise
 var pipNameSqlOnprem = format('sql-onprem-pip-{0}', networkAddrB)

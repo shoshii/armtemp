@@ -10,53 +10,41 @@
                 "secretName": "clientIp"
             }
         },
-        "aadLogin1Fqdn": {
-            "value": "login.microsoftonline.com"
+        "dnsLabelPrefix": {
+            "value": "shoshiiadx"
         },
-        "aadLogin2Fqdn": {
-            "value": "login.microsoft.com"
+        "monitorIps": {
+            "value": [
+                "40.79.195.2/32",
+                "40.115.138.201/32",
+                "40.115.140.98/32",
+                "40.115.141.134/32",
+                "40.115.142.61/32",
+                "40.115.137.9/32",
+                "40.115.137.124/32",
+                "40.115.137.189/32",
+                "40.115.140.218/32",
+                "52.163.244.128/32",
+                "104.46.217.37/32"
+            ]
         },
-        "aadGraph1Fqdn": {
-            "value": "graph.windows.net"
+        "managementIps": {
+            "value": [
+                "20.43.89.90/32"
+            ]
         },
-        "aadGraph2Fqdn": {
-            "value": "graph.microsoft.com"
-        },
-        "aadGraphPpeFqdn": {
-            "value": "graph.microsoft-ppe.com"
-        },
-        "monitorProdWarmpathFqdn": {
-            "value": "prod.warmpath.msftcloudes.com"
-        },
-        "monitorGcsProdFqdn": {
-            "value": "gcs.prod.monitoring.core.windows.net"
-        },
-        "monitorProdDiagnosticsFqdn": {
-            "value": "production.diagnostics.monitoring.core.windows.net"
-        },
-        "monitorShoeboxFqdn": {
-            "value": "shoebox2.metrics.nsatc.net"
-        },
-        "caMsOcspFqdn": {
-            "value": "ocsp.msocsp.com"
-        },
-        "caDigicertOcspFqdn": {
-            "value": "ocsp.digicert.com"
-        },
-        "caDigicertCrlFqdn": {
-            "value": "crl3.digicert.com"
-        },
-        "caMsCrlFqdn": {
-            "value": "crl.microsoft.com"
-        },
-        "caMsFqdn": {
-            "value": "www.microsoft.com"
-        },
-        "storageFqdn": {
-            "value": "*.core.windows.net"
-        },
-        "keyVaultFqdn": {
-            "value": "*.vault.azure.net"
+        "certificatioAuthOutboundFqdns": {
+            "value": [
+                "ocsp.msocsp.com",
+                "ocsp.digicert.com",
+                "crl3.digicert.com",
+                "crl.microsoft.com",
+                "www.microsoft.com",
+                "go.microsoft.com",
+                "dmd.metaservices.microsoft.com",
+                "www.msftconnecttest.com",
+                "adl.windows.com"
+            ]
         }
     }
   }
