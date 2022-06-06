@@ -513,8 +513,8 @@ resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectio
             destinationAddresses: [
               'AzureActiveDirectory'
             ]
-            sourceAddresses: [
-              '*'
+            sourceIpGroups: [
+              ipgroupAdx.id
             ]
             destinationPorts: [
               '443'
