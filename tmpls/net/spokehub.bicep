@@ -732,7 +732,7 @@ resource extensionBaseA 'Microsoft.Compute/virtualMachines/extensions@2021-11-01
 }
 
 // Data Science VM in spoke
-var nicNameDsAzureSpoke = format('nicdsvmazurespoke{0}', networkAddrB)
+/* var nicNameDsAzureSpoke = format('nicdsvmazurespoke{0}', networkAddrB)
 resource networkInterfaceDsAzureSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
   name: nicNameDsAzureSpoke
   location: location
@@ -831,7 +831,7 @@ resource extensionBaseDsAzureSpoke 'Microsoft.Compute/virtualMachines/extensions
     }
   }
 }
-
+ */
 // Ubuntu VM in spoke
 var nicNameUbuntuAzureSpoke = format('nicubuntuazurespoke{0}', networkAddrB)
 resource networkInterfaceUbuntuAzureSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
@@ -852,7 +852,7 @@ resource networkInterfaceUbuntuAzureSpoke 'Microsoft.Network/networkInterfaces@2
   }
   dependsOn:[
     virtualNetworkAzureSpoke
-    vmDsAzureSpoke
+    vmWinAzureSpoke
   ]
 }
 
@@ -900,7 +900,7 @@ resource vmUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/* 
 resource extensionBaseUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmUbuntuAzureSpoke.name)
   location: location
@@ -916,7 +916,7 @@ resource extensionBaseUbuntuAzureSpoke 'Microsoft.Compute/virtualMachines/extens
       commandToExecute: 'sh deploy_ubuntu.sh'
     }
   }
-}
+} */
 
 // VMs in hub network ===================================================================
 // VM in hub
@@ -1144,7 +1144,7 @@ resource extensionBaseB 'Microsoft.Compute/virtualMachines/extensions@2021-11-01
 }
 
 // data science machine VM in onpremise
-var pipNameDsOnprem = format('dsvm-onprem-pip-{0}', networkAddrB)
+/* var pipNameDsOnprem = format('dsvm-onprem-pip-{0}', networkAddrB)
 resource publicIPAddressDsOnprem 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
   name: pipNameDsOnprem
   location: location
@@ -1261,7 +1261,7 @@ resource extensionBaseDsOnprem 'Microsoft.Compute/virtualMachines/extensions@202
     }
   }
 }
-
+ */
 // Ubuntu VM in onpremise
 var nicNameUbuntuOnprem = format('nicubuntuonprem{0}', networkAddrB)
 resource networkInterfaceUbuntuOnprem 'Microsoft.Network/networkInterfaces@2020-11-01' = {
@@ -1282,7 +1282,7 @@ resource networkInterfaceUbuntuOnprem 'Microsoft.Network/networkInterfaces@2020-
   }
   dependsOn:[
     virtualNetworkOnprem
-    vmDsOnprem
+    vmWinOnprem
   ]
 }
 
@@ -1329,7 +1329,7 @@ resource vmUbuntuOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
 }
-
+/* 
 resource extensionBaseUbuntuOnprem 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
   name: format('{0}/extensionBase', vmUbuntuOnprem.name)
   location: location
@@ -1346,7 +1346,7 @@ resource extensionBaseUbuntuOnprem 'Microsoft.Compute/virtualMachines/extensions
     }
   }
 }
-
+ */
 // SQL Server in onpremise
 var pipNameSqlOnprem = format('sql-onprem-pip-{0}', networkAddrB)
 resource publicIPAddressSqlOnprem 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
@@ -1382,7 +1382,7 @@ resource networkInterfaceSqlOnprem 'Microsoft.Network/networkInterfaces@2020-11-
   }
   dependsOn:[
     virtualNetworkOnprem
-    networkInterfaceDsOnprem
+    networkInterfaceWinOnprem
   ]
 }
 
@@ -1445,7 +1445,7 @@ resource vmSqlOnprem 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     }
   }
   dependsOn: [
-    vmDsOnprem
+    vmWinOnprem
   ]
 }
 
