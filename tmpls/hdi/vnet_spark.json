@@ -8,6 +8,7 @@
         },
         "networkAddrB": {
             "type": "string",
+            "defaultValue": "192",
             "metadata": {
                 "description": "xxx.<networkAddrB>.xxx.xxx"
             }
@@ -82,10 +83,10 @@
         }
     },
     "variables": {
-        "primaryStorageAccountName": "[concat(parameters('userPrefix'), parameters('networkAddrB'), resourceGroup().name, 'stg')]",
-        "managedIdResourceId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', concat(parameters('userPrefix'), parameters('networkAddrB'), resourceGroup().name, 'uami'))]",
-        "virtualNetworkResourceId": "[resourceId('Microsoft.Network/virtualNetworks', concat('hdi-vnet-', parameters('networkAddrB')))]",
-        "subnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', concat('hdi-vnet-', parameters('networkAddrB')), 'hdi-subnet')]"
+        "primaryStorageAccountName": "[concat(parameters('userPrefix'), resourceGroup().name, 'stg')]",
+        "managedIdResourceId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', concat(parameters('userPrefix'), resourceGroup().name, 'uami'))]",
+        "virtualNetworkResourceId": "[resourceId('Microsoft.Network/virtualNetworks', 'hdi-vnet')]",
+        "subnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'hdi-vnet', 'hdi-subnet')]"
     },
     "resources": [
         {

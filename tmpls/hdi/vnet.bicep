@@ -1,7 +1,7 @@
 param location string = resourceGroup().location
 
 @description('ipv4 address class B part; ex. the vnet include resources is created like 10.<nettworkAddrB>.0.0/16')
-param networkAddrB string
+param networkAddrB string = '192'
 param clientIp string
 param dnsLabelPrefix string
 // hdi params ------------------------------------------------------------------------------------------------
@@ -16,10 +16,10 @@ param hdiSubnetName string = 'hdi-subnet'
 param vnetCidrHdi string = format('10.{0}.0.0/16', networkAddrB)
 
 @description('The name of the virtual network to create.')
-param hdiVnetName string = format('hdi-vnet-{0}', networkAddrB)
+param hdiVnetName string ='hdi-vnet'
 
 @description('The name of the Azure Data Explorer Cluster to create.')
-param clusterName string = format('hdi{0}{1}{2}', dnsLabelPrefix, networkAddrB, resourceGroup().name)
+param clusterName string = format('{0}{1}', dnsLabelPrefix, resourceGroup().name)
 
 var defaultSubnetName = 'default-subnet'
 var subnetCidrDefault = format('10.{0}.16.0/20', networkAddrB)
@@ -28,7 +28,7 @@ output deploySettings string = clusterName
 
 // hdi -------------------------------------------------------------------------------
 resource networkSecurityGroupHdi 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
-  name: format('nsg-hdi{0}', networkAddrB)
+  name: 'nsg-hdi'
   location: location
   properties: {
     securityRules: [
@@ -158,7 +158,7 @@ resource defaultSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = 
   }
 }
 
-var storageName = format('{0}{1}{2}stg', dnsLabelPrefix, networkAddrB, resourceGroup().name)
+var storageName = format('{0}{1}stg', dnsLabelPrefix, resourceGroup().name)
 resource storageAccount 'Microsoft.Storage/storageAccounts@2021-02-01' = {
   name: storageName
   location: location
@@ -187,14 +187,14 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-02-01' = {
 }
 
 
-var uMIname = format('{0}{1}{2}uami', dnsLabelPrefix, networkAddrB, resourceGroup().name)
+var uMIname = format('{0}{1}uami', dnsLabelPrefix, resourceGroup().name)
 resource userAssignedManagedId 'Microsoft.ManagedIdentity/userAssignedIdentities@2021-09-30-preview' = {
   name: uMIname
   location: location
 }
 
 resource assignedToStorage 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  name: guid(format('{0}{1}', uniqueString(resourceGroup().id), networkAddrB))
+  name: guid(uniqueString(resourceGroup().id))
   scope: storageAccount
   properties: {
     //roleDefinitionId: roleDefinitionStorage.id
@@ -291,24 +291,24 @@ param adminUserPassword string
 
 // Ubuntu VM in spoke
 resource publicIPAddressHdiSpokeUbu 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
-  name: format('pip-ubuntu-hdi-spoke{0}', networkAddrB)
+  name: format('pip-ubuntu-hdi-spoke{0}', resourceGroup().name)
   location: location
   properties: {
     publicIPAllocationMethod: 'Dynamic'
     dnsSettings: {
-      domainNameLabel: format('ubuhdispoke{0}', networkAddrB)
+      domainNameLabel: format('ubuhdispoke{0}', resourceGroup().name)
     }
   }
 }
 
-var nicNameUbuntuHdiSpoke = format('nicubuntuHdiSpoke{0}', networkAddrB)
+var nicNameUbuntuHdiSpoke = format('nicubuntuHdiSpoke{0}', resourceGroup().name)
 resource networkInterfaceUbuntuHdiSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
   name: nicNameUbuntuHdiSpoke
   location: location
   properties: {
     ipConfigurations: [
       {
-        name: format('ipconfig-ubuntu-HdiSpoke{0}', networkAddrB)
+        name: format('ipconfig-ubuntu-HdiSpoke{0}', resourceGroup().name)
         properties: {
           privateIPAllocationMethod: 'Dynamic'
           publicIPAddress: {
@@ -324,7 +324,7 @@ resource networkInterfaceUbuntuHdiSpoke 'Microsoft.Network/networkInterfaces@202
 }
 
 param adminPublicKey string
-var vmNameUbuntuHdiSpoke = format('ubuhdispoke{0}', networkAddrB)
+var vmNameUbuntuHdiSpoke = format('ubu{0}', resourceGroup().name)
 resource vmUbuntuHdiSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameUbuntuHdiSpoke
   location: location
@@ -388,24 +388,24 @@ resource extensionBaseUbuntuHdiSpoke 'Microsoft.Compute/virtualMachines/extensio
 
 // Windows Server VM in spoke
 resource publicIPAddressHdiSpokeWin 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
-  name: format('pip-win-hdi-spoke{0}', networkAddrB)
+  name: format('pip-win-hdi-spoke{0}', resourceGroup().name)
   location: location
   properties: {
     publicIPAllocationMethod: 'Dynamic'
     dnsSettings: {
-      domainNameLabel: format('winhdispoke{0}', networkAddrB)
+      domainNameLabel: format('winhdispoke{0}', resourceGroup().name)
     }
   }
 }
 
-var nicNameWinAzureSpoke = format('nicwinazurespoke{0}', networkAddrB)
+var nicNameWinAzureSpoke = format('nicwinazurespoke{0}', resourceGroup().name)
 resource networkInterfaceWinAzureSpoke 'Microsoft.Network/networkInterfaces@2020-11-01' = {
   name: nicNameWinAzureSpoke
   location: location
   properties: {
     ipConfigurations: [
       {
-        name: format('ipconfig-win-azurespoke{0}', networkAddrB)
+        name: format('ipconfig-win-azurespoke{0}', resourceGroup().name)
         properties: {
           publicIPAddress: {
             id: publicIPAddressHdiSpokeWin.id
@@ -420,7 +420,7 @@ resource networkInterfaceWinAzureSpoke 'Microsoft.Network/networkInterfaces@2020
   }
 }
 
-var storageNameWinAzureSpoke = format('was{0}{1}', uniqueString(resourceGroup().id), networkAddrB)
+var storageNameWinAzureSpoke = format('was{0}', uniqueString(resourceGroup().id))
 resource storageaccountWinAzureSpoke 'Microsoft.Storage/storageAccounts@2021-02-01' = {
   name: storageNameWinAzureSpoke
   location: location
@@ -430,7 +430,7 @@ resource storageaccountWinAzureSpoke 'Microsoft.Storage/storageAccounts@2021-02-
   }
 }
 
-var vmNameWinAzureSpoke = format('winazspoke{0}', networkAddrB)
+var vmNameWinAzureSpoke = format('win{0}', resourceGroup().name)
 resource vmWinAzureSpoke 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   name: vmNameWinAzureSpoke
   location: location
