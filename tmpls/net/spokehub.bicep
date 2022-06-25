@@ -86,7 +86,7 @@ resource virtualNetworkAzureHub 'Microsoft.Network/virtualNetworks@2019-11-01' =
 }
 
 var subnetNameFirewall = 'AzureFirewallSubnet'
-resource subnetAzureHubFirewall 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource subnetAzureHubFirewall 'Microsoft.Network/virtualNetworks/subnets@2021-03-01' = {
   name: subnetNameFirewall
   parent: virtualNetworkAzureHub
   properties: {
@@ -95,7 +95,7 @@ resource subnetAzureHubFirewall 'Microsoft.Network/virtualNetworks/subnets@2021-
 }
 
 var subnetGwName = 'GatewaySubnet'
-resource gwSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource gwSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-03-01' = {
   parent: virtualNetworkAzureHub
   name: subnetGwName
   properties: {
@@ -107,7 +107,7 @@ resource gwSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
 }
 
 var subnetBastionName = 'AzureBastionSubnet'
-resource subnetBastion 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource subnetBastion 'Microsoft.Network/virtualNetworks/subnets@2021-03-01' = {
   parent: virtualNetworkAzureHub
   name: subnetBastionName
   properties: {
@@ -119,7 +119,7 @@ resource subnetBastion 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = 
 }
 
 var subnetNameDefault = format('azure-hub-default{0}', networkAddrB)
-resource subnetAzureHubDefault 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource subnetAzureHubDefault 'Microsoft.Network/virtualNetworks/subnets@2021-03-01' = {
   parent: virtualNetworkAzureHub
   name: subnetNameDefault
   properties: {
@@ -188,7 +188,7 @@ resource virtualNetworkOnprem 'Microsoft.Network/virtualNetworks@2019-11-01' = {
 }
 
 var subnetNameOnprem = 'default-onprem'
-resource subnetOnprem 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource subnetOnprem 'Microsoft.Network/virtualNetworks/subnets@2021-03-01' = {
   name: subnetNameOnprem
   parent: virtualNetworkOnprem
   properties: {
@@ -213,7 +213,7 @@ resource virtualNetworkAzureSpoke 'Microsoft.Network/virtualNetworks@2019-11-01'
 }
 
 var subnetNameAzureSpoke = 'default-azurespoke'
-resource subnetAzureSpoke 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
+resource subnetAzureSpoke 'Microsoft.Network/virtualNetworks/subnets@2021-03-01' = {
   name: subnetNameAzureSpoke
   parent: virtualNetworkAzureSpoke
   properties: {
@@ -310,7 +310,7 @@ resource vpnVnetConnection 'Microsoft.Network/connections@2020-11-01' = {
 
 // Azure Firewall
 var ipgroupNameAzureSpoke = format('ipgroup-spoke-{0}-{1}', uniqueString(resourceGroup().id), networkAddrB)
-resource ipgroupAzureSpoke 'Microsoft.Network/ipGroups@2021-05-01' = {
+resource ipgroupAzureSpoke 'Microsoft.Network/ipGroups@2021-03-01' = {
   name: ipgroupNameAzureSpoke
   location: location
   properties: {
@@ -320,7 +320,7 @@ resource ipgroupAzureSpoke 'Microsoft.Network/ipGroups@2021-05-01' = {
   }
 }
 var ipgroupNameAzureHub = format('ipgroup-hub-{0}-{1}', uniqueString(resourceGroup().id), networkAddrB)
-resource ipgroupAzureHub 'Microsoft.Network/ipGroups@2021-05-01' = {
+resource ipgroupAzureHub 'Microsoft.Network/ipGroups@2021-03-01' = {
   name: ipgroupNameAzureHub
   location: location
   properties: {
@@ -331,7 +331,7 @@ resource ipgroupAzureHub 'Microsoft.Network/ipGroups@2021-05-01' = {
 }
 
 var ipgroupNameOnprem = format('ipgroup-onprem-{0}-{1}', uniqueString(resourceGroup().id), networkAddrB)
-resource ipgroupOnprem 'Microsoft.Network/ipGroups@2021-05-01' = {
+resource ipgroupOnprem 'Microsoft.Network/ipGroups@2021-03-01' = {
   name: ipgroupNameOnprem
   location: location
   properties: {
@@ -342,7 +342,7 @@ resource ipgroupOnprem 'Microsoft.Network/ipGroups@2021-05-01' = {
 }
 
 var pipNameHubFirewall = format('hub-firewall-pip-{0}', networkAddrB)
-resource publicIPAddressHubFirewalls 'Microsoft.Network/publicIPAddresses@2021-05-01' = [for idx in range(0, 3): {
+resource publicIPAddressHubFirewalls 'Microsoft.Network/publicIPAddresses@2021-03-01' = [for idx in range(0, 3): {
   name: format('{0}-{1}', pipNameHubFirewall, idx)
   location: location
   sku: {
@@ -380,7 +380,7 @@ var firewallIpConfigurations = concat(firewallIpConfigurationPrimal, firewallIpC
 //var firewallIpConfigurations = firewallIpConfigurationPrimal
 var nameFirewall = format('hubfirewall{0}', networkAddrB)
 var nameFirewallPolicy = format('{0}-policy', nameFirewall)
-resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = {
+resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-03-01' = {
   name: nameFirewallPolicy
   dependsOn: [
     virtualNetworkGateway
@@ -392,7 +392,7 @@ resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = {
 }
 
 var nwRuleCollectionGroupName = format('{0}/DefaultNetworkRuleCollectionGroup', nameFirewallPolicy)
-resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = {
+resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-03-01' = {
   name: nwRuleCollectionGroupName
   dependsOn: [
     firewallPolicy
@@ -467,7 +467,7 @@ resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectio
 }
 
 var appRuleCollectionGroupName = format('{0}/DefaultApplicationRuleCollectionGroup', nameFirewallPolicy)
-resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = {
+resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-03-01' = {
   name: appRuleCollectionGroupName
   dependsOn: [
     nwRuleCollectionGroup
@@ -537,7 +537,7 @@ resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollecti
   }
 }
 
-resource firewall 'Microsoft.Network/azureFirewalls@2021-05-01' = {
+resource firewall 'Microsoft.Network/azureFirewalls@2021-03-01' = {
   name: nameFirewall
   location: location
   dependsOn: [
@@ -571,7 +571,7 @@ resource publicIPAddressBastionHost 'Microsoft.Network/publicIPAddresses@2019-11
 }
 
 var bastionHostName = format('bastionhost-{0}', networkAddrB)
-resource bastionHost 'Microsoft.Network/bastionHosts@2021-05-01' = {
+resource bastionHost 'Microsoft.Network/bastionHosts@2021-03-01' = {
   name: bastionHostName
   location: location
   dependsOn: [

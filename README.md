@@ -75,6 +75,9 @@ $ misc/get_adx_dependencies.ps1 <subscription id> <adx cluster name> <resource g
 - [Azure CLI でサインインする](https://docs.microsoft.com/ja-jp/cli/azure/authenticate-azure-cli)
 - [Azure CLI でサブスクリプションを管理する](https://docs.microsoft.com/ja-jp/cli/azure/manage-azure-subscriptions-azure-cli)
 
+#### デバッグ
+- [enable debug log](https://docs.microsoft.com/en-us/azure/azure-resource-manager/troubleshooting/enable-debug-logging?tabs=azure-cli)
+
 #### RBAC
 - [Role Assign の基本知識](https://docs.microsoft.com/en-us/azure/azure-resource-manager/bicep/scenarios-rbac)
 

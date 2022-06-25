@@ -128,7 +128,7 @@ resource networkSecurityGroupHdi 'Microsoft.Network/networkSecurityGroups@2019-1
 
 // need NAT or firewall solotion for outbound cluster to get public ip
 // https://docs.microsoft.com/en-us/azure/hdinsight/hdinsight-private-link#NATorFirewall
-resource publicIpPrefixes 'Microsoft.Network/publicIPPrefixes@2021-08-01' = {
+resource publicIpPrefixes 'Microsoft.Network/publicIPPrefixes@2021-03-01' = {
   name: format('hdi{0}', networkAddrB)
   location: location
   sku: {
@@ -140,7 +140,7 @@ resource publicIpPrefixes 'Microsoft.Network/publicIPPrefixes@2021-08-01' = {
     publicIPAddressVersion: 'IPv4'
   }
 }
-resource natGateway 'Microsoft.Network/natGateways@2021-08-01' = {
+resource natGateway 'Microsoft.Network/natGateways@2021-03-01' = {
   name: format('hdi{0}', networkAddrB)
   location: location
   sku: {
@@ -182,6 +182,7 @@ resource hdiSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
       id: networkSecurityGroupHdi.id
     }
     privateLinkServiceNetworkPolicies: 'Disabled'
+    privateEndpointNetworkPolicies: 'Disabled'
     natGateway: {
       id: natGateway.id
     }
@@ -202,7 +203,7 @@ resource defaultSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = 
   }
 }
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' = {
+resource storageAccount 'Microsoft.Storage/storageAccounts@2021-06-01' = {
   name: clusterName
   location: location
   kind: 'StorageV2'
@@ -210,7 +211,8 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' = {
     name: 'Standard_LRS'
   }
   properties: {
-    isHnsEnabled: true
+    // isHnsEnabled: true
+    isHnsEnabled: false
     networkAcls: {
       defaultAction: 'Deny'
       bypass: 'AzureServices'
@@ -233,7 +235,7 @@ resource assignedToStorage 'Microsoft.Authorization/roleAssignments@2020-10-01-p
     principalType: 'ServicePrincipal'
   }
 }
-
+/*
 resource privateEndpointPrimaryStorageBlob 'Microsoft.Network/privateEndpoints@2020-07-01' = {
   name: format('pend-hdi-storage-blob{0}', networkAddrB)
   location: location
@@ -254,7 +256,6 @@ resource privateEndpointPrimaryStorageBlob 'Microsoft.Network/privateEndpoints@2
     ]
   }
 }
-
 resource privateEndpointPrimaryStorageDfs 'Microsoft.Network/privateEndpoints@2020-07-01' = {
   name: format('pend-hdi-storage-dfs{0}', networkAddrB)
   location: location
@@ -340,7 +341,7 @@ resource privateDnsDfsRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = 
     ]
   }
 }
-
+*/
 /*
 resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
   name: clusterName

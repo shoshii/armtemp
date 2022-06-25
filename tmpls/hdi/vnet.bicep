@@ -24,6 +24,8 @@ param clusterName string = format('hdi{0}{1}{2}', dnsLabelPrefix, networkAddrB, 
 var defaultSubnetName = 'default-subnet'
 var subnetCidrDefault = format('10.{0}.16.0/20', networkAddrB)
 
+output deploySettings string = clusterName
+
 // hdi -------------------------------------------------------------------------------
 resource networkSecurityGroupHdi 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
   name: format('nsg-hdi{0}', networkAddrB)
@@ -130,6 +132,14 @@ resource hdiSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
     networkSecurityGroup: {
       id: networkSecurityGroupHdi.id
     }
+    serviceEndpoints: [
+      {
+        locations: [
+          location
+        ]
+        service: 'Microsoft.Storage'
+      }
+    ]
     privateLinkServiceNetworkPolicies: 'Disabled'
   }
 }
@@ -148,8 +158,9 @@ resource defaultSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = 
   }
 }
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' = {
-  name: clusterName
+var storageName = format('{0}{1}{2}stg', dnsLabelPrefix, networkAddrB, resourceGroup().name)
+resource storageAccount 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageName
   location: location
   kind: 'StorageV2'
   sku: {
@@ -164,7 +175,6 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' = {
     networkAcls: {
       defaultAction: 'Deny'
       bypass: 'AzureServices'
-      /*
       virtualNetworkRules: [
         {
           action: 'Allow'
@@ -172,13 +182,14 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' = {
           state: 'Succeeded'
         }
       ]
-      */
     }
   }
 }
 
+
+var uMIname = format('{0}{1}{2}uami', dnsLabelPrefix, networkAddrB, resourceGroup().name)
 resource userAssignedManagedId 'Microsoft.ManagedIdentity/userAssignedIdentities@2021-09-30-preview' = {
-  name: format('{0}umid{1}{2}', dnsLabelPrefix, networkAddrB, resourceGroup().name)
+  name: uMIname
   location: location
 }
 
@@ -193,15 +204,17 @@ resource assignedToStorage 'Microsoft.Authorization/roleAssignments@2020-10-01-p
   }
 }
 
-
-
-resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
+/*
+resource hdi 'Microsoft.HDInsight/clusters@2018-06-01-preview' = {
   name: clusterName
   location: location
+  dependsOn: [
+    userAssignedManagedId
+  ]
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      id: userAssignedManagedId
+      '/subscriptions/1a9cbb0e-b645-4768-a96a-0269c122b179/resourcegroups/rg625hdi13/providers/microsoft.managedidentity/userassignedidentities/shoshii63rg625hdi13uami': {}
     }
   }
   properties: {
@@ -209,7 +222,10 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
     osType: 'Linux'
     tier: 'Standard'
     clusterDefinition: {
-      kind: 'hadoop'
+      kind: 'spark'
+      componentVersion: {
+        Spark: '3.1'
+      }
       configurations: {
         gateway: {
           restAuthCredential: {
@@ -246,7 +262,7 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
         }
         {
           name: 'workernode'
-          targetInstanceCount: 3
+          targetInstanceCount: 2
           hardwareProfile: {
             vmSize: 'standard_e8_v3'
           }
@@ -261,24 +277,11 @@ resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
             subnet: hdiSubnet.id
           }
         }
-        {
-          name: 'zookeepernode'
-          targetInstanceCount: 3
-          hardwareProfile: {
-            vmSize: 'standard_a2_v2'
-          }
-          osProfile: {
-            linuxOperatingSystemProfile: {
-              username: adminUserName
-              password: adminUserPassword
-            }
-          }
-        }
       ]
     }
   }
 }
-
+*/
 
 param adminUserName string
 @secure()
