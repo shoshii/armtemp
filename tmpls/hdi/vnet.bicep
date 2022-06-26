@@ -62,6 +62,7 @@ resource networkSecurityGroupHdi 'Microsoft.Network/networkSecurityGroups@2019-1
           direction: 'Outbound'
         }
       }
+      /*
       {
         name: 'hdi-internet-outbound'
         properties: {
@@ -76,6 +77,7 @@ resource networkSecurityGroupHdi 'Microsoft.Network/networkSecurityGroups@2019-1
           direction: 'Outbound'
         }
       }
+      */
       {
         name: 'allowHttpsfromClient'
         properties: {
