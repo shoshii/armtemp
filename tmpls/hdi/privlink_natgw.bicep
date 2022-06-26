@@ -18,9 +18,6 @@ param vnetCidrHdi string = format('10.{0}.0.0/16', networkAddrB)
 @description('The name of the virtual network to create.')
 param hdiVnetName string = 'hdi-vnet'
 
-@description('The name of the HDI Cluster to create.')
-param clusterName string = format('{0}{1}', dnsLabelPrefix, resourceGroup().name)
-
 var defaultSubnetName = 'default-subnet'
 var subnetCidrDefault = format('10.{0}.16.0/20', networkAddrB)
 
@@ -212,8 +209,24 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-06-01' = {
     name: 'Standard_LRS'
   }
   properties: {
+    isHnsEnabled: false
+    networkAcls: {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    }
+  }
+}
+
+var storageNameGen2 = format('{0}{1}gen2', dnsLabelPrefix, resourceGroup().name)
+resource storageAccountGen2 'Microsoft.Storage/storageAccounts@2021-06-01' = {
+  name: storageNameGen2
+  location: location
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS'
+  }
+  properties: {
     isHnsEnabled: true
-    //isHnsEnabled: false
     networkAcls: {
       defaultAction: 'Deny'
       bypass: 'AzureServices'
@@ -229,7 +242,7 @@ resource userAssignedManagedId 'Microsoft.ManagedIdentity/userAssignedIdentities
 
 resource assignedToStorage 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
   name: guid(format('{0}{1}', uniqueString(resourceGroup().id), 'uamionstorage'))
-  scope: storageAccount
+  scope: storageAccountGen2
   properties: {
     //roleDefinitionId: roleDefinitionStorage.id
     roleDefinitionId: format('{0}/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b', subscription().id)
@@ -238,8 +251,10 @@ resource assignedToStorage 'Microsoft.Authorization/roleAssignments@2020-10-01-p
   }
 }
 
+
+// private end points & private link services
 resource privateEndpointPrimaryStorageBlob 'Microsoft.Network/privateEndpoints@2020-07-01' = {
-  name: format('pend-hdi-storage-blob{0}', resourceGroup().name)
+  name: format('pend-hdi-storage-stg-blob{0}', resourceGroup().name)
   location: location
   properties: {
     subnet: {
@@ -247,7 +262,7 @@ resource privateEndpointPrimaryStorageBlob 'Microsoft.Network/privateEndpoints@2
     }
     privateLinkServiceConnections: [
       {
-        name: format('plink-service-blob-{0}-{1}', storageAccount.name, resourceGroup().name)
+        name: format('plink-service-stg-blob-{0}-{1}', storageAccount.name, resourceGroup().name)
         properties: {
           privateLinkServiceId: storageAccount.id
           groupIds: [
@@ -258,8 +273,9 @@ resource privateEndpointPrimaryStorageBlob 'Microsoft.Network/privateEndpoints@2
     ]
   }
 }
-resource privateEndpointPrimaryStorageDfs 'Microsoft.Network/privateEndpoints@2020-07-01' = {
-  name: format('pend-hdi-storage-dfs{0}', resourceGroup().name)
+
+resource privateEndpointPrimaryStorageGen2Blob 'Microsoft.Network/privateEndpoints@2020-07-01' = {
+  name: format('pend-hdi-storage-gen2-blob{0}', resourceGroup().name)
   location: location
   properties: {
     subnet: {
@@ -267,9 +283,29 @@ resource privateEndpointPrimaryStorageDfs 'Microsoft.Network/privateEndpoints@20
     }
     privateLinkServiceConnections: [
       {
-        name: format('plink-service-dfs-{0}-{1}', storageAccount.name, resourceGroup().name)
+        name: format('plink-service-gen2-blob-{0}-{1}', storageAccountGen2.name, resourceGroup().name)
         properties: {
-          privateLinkServiceId: storageAccount.id
+          privateLinkServiceId: storageAccountGen2.id
+          groupIds: [
+            'blob'
+          ]
+        }
+      }
+    ]
+  }
+}
+resource privateEndpointPrimaryStorageGen2Dfs 'Microsoft.Network/privateEndpoints@2020-07-01' = {
+  name: format('pend-hdi-storage-gen2-dfs{0}', resourceGroup().name)
+  location: location
+  properties: {
+    subnet: {
+      id: resourceId('Microsoft.Network/VirtualNetworks/subnets', virtualNetworkHdiSpoke.name, hdiSubnet.name)
+    }
+    privateLinkServiceConnections: [
+      {
+        name: format('plink-service-dfs-{0}-{1}', storageAccountGen2.name, resourceGroup().name)
+        properties: {
+          privateLinkServiceId: storageAccountGen2.id
           groupIds: [
             'dfs'
           ]
@@ -278,17 +314,8 @@ resource privateEndpointPrimaryStorageDfs 'Microsoft.Network/privateEndpoints@20
     ]
   }
 }
-resource vnetLinkBlob 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
-  name: format('{0}/vnetlinkblob{1}', privateDnsZoneBlob.name, resourceGroup().name)
-  location: 'global'
-  properties: {
-    virtualNetwork: {
-      id: virtualNetworkHdiSpoke.id
-    }
-    registrationEnabled: false
-  }
-}
 
+// private DNS zones and vnet links
 resource privateDnsZoneBlob 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   //name: format('privatelink{0}.blob.core.windows.net', resourceGroup().name)
   name: 'privatelink.blob.core.windows.net'
@@ -298,16 +325,23 @@ resource privateDnsZoneBlob 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   ]
 }
 
-resource privateDnsBlobRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = {
-  parent: privateDnsZoneBlob
-  name: storageAccount.name
+resource privateDnsZoneDfs 'Microsoft.Network/privateDnsZones@2020-06-01' = {
+  //name: format('privatelink{0}.dfs.core.windows.net', resourceGroup().name)
+  name: 'privatelink.dfs.core.windows.net'
+  location: 'global'
+  dependsOn: [
+    virtualNetworkHdiSpoke
+  ]
+}
+
+resource vnetLinkBlob 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  name: format('{0}/vnetlinkblob{1}', privateDnsZoneBlob.name, resourceGroup().name)
+  location: 'global'
   properties: {
-    ttl: 3600
-    aRecords: [
-      {
-        ipv4Address: first(first(privateEndpointPrimaryStorageBlob.properties.customDnsConfigs).ipAddresses)
-      }
-    ]
+    virtualNetwork: {
+      id: virtualNetworkHdiSpoke.id
+    }
+    registrationEnabled: false
   }
 }
 
@@ -322,109 +356,45 @@ resource vnetLinkDfs 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020
   }
 }
 
-resource privateDnsZoneDfs 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  //name: format('privatelink{0}.dfs.core.windows.net', resourceGroup().name)
-  name: 'privatelink.dfs.core.windows.net'
-  location: 'global'
-  dependsOn: [
-    virtualNetworkHdiSpoke
-  ]
-}
-
-resource privateDnsDfsRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = {
-  parent: privateDnsZoneDfs
+resource privateDnsBlobRecord 'Microsoft.Network/privateDnsZones/A@2020-06-01' = {
+  parent: privateDnsZoneBlob
   name: storageAccount.name
   properties: {
     ttl: 3600
     aRecords: [
       {
-        ipv4Address: first(first(privateEndpointPrimaryStorageDfs.properties.customDnsConfigs).ipAddresses)
+        ipv4Address: first(first(privateEndpointPrimaryStorageBlob.properties.customDnsConfigs).ipAddresses)
+      }
+    ]
+  }
+}
+resource privateDnsBlobRecordGen2 'Microsoft.Network/privateDnsZones/A@2020-06-01' = {
+  parent: privateDnsZoneBlob
+  name: storageAccountGen2.name
+  properties: {
+    ttl: 3600
+    aRecords: [
+      {
+        ipv4Address: first(first(privateEndpointPrimaryStorageGen2Blob.properties.customDnsConfigs).ipAddresses)
       }
     ]
   }
 }
 
-/*
-resource hdi 'Microsoft.HDInsight/clusters@2021-06-01' = {
-  name: clusterName
-  location: location
+resource privateDnsDfsRecordGen2 'Microsoft.Network/privateDnsZones/A@2020-06-01' = {
+  parent: privateDnsZoneDfs
+  name: storageAccountGen2.name
   properties: {
-    clusterVersion: '4.0'
-    osType: 'Linux'
-    tier: 'Standard'
-    clusterDefinition: {
-      kind: 'hadoop'
-      configurations: {
-        gateway: {
-          restAuthCredential: {
-            isEnabled: true
-            username: adminUserName
-            password: adminUserPassword
-          }
-        }
+    ttl: 3600
+    aRecords: [
+      {
+        ipv4Address: first(first(privateEndpointPrimaryStorageGen2Dfs.properties.customDnsConfigs).ipAddresses)
       }
-    }
-    storageProfile: {
-      storageaccounts: [
-        storageAccount
-      ]
-    }
-    computeProfile: {
-      roles: [
-        {
-          name: 'headnode'
-          targetInstanceCount: 2
-          hardwareProfile: {
-            vmSize: 'standard_e4_v3'
-          }
-          osProfile: {
-            linuxOperatingSystemProfile: {
-              username: adminUserName
-              password: adminUserPassword
-            }
-          }
-          virtualNetworkProfile: {
-            id: virtualNetworkHdiSpoke.id
-            subnet: hdiSubnet.id
-          }
-        }
-        {
-          name: 'workernode'
-          targetInstanceCount: 3
-          hardwareProfile: {
-            vmSize: 'standard_e8_v3'
-          }
-          osProfile: {
-            linuxOperatingSystemProfile: {
-              username: adminUserName
-              password: adminUserPassword
-            }
-          }
-          virtualNetworkProfile: {
-            id: virtualNetworkHdiSpoke.id
-            subnet: hdiSubnet.id
-          }
-        }
-        {
-          name: 'zookeepernode'
-          targetInstanceCount: 3
-          hardwareProfile: {
-            vmSize: 'standard_a2_v2'
-          }
-          osProfile: {
-            linuxOperatingSystemProfile: {
-              username: adminUserName
-              password: adminUserPassword
-            }
-          }
-        }
-      ]
-    }
+    ]
   }
 }
-*/
 
-
+// virtual machines
 param adminUserName string
 @secure()
 @minLength(12)

@@ -83,7 +83,7 @@
         }
     },
     "variables": {
-        "primaryStorageAccountName": "[concat(parameters('userPrefix'), resourceGroup().name, 'stg')]",
+        "primaryStorageAccountName": "[concat(parameters('userPrefix'), resourceGroup().name, 'gen2')]",
         "managedIdResourceId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', concat(parameters('userPrefix'), resourceGroup().name, 'uami'))]",
         "virtualNetworkResourceId": "[resourceId('Microsoft.Network/virtualNetworks', 'hdi-vnet')]",
         "subnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'hdi-vnet', 'hdi-subnet')]"

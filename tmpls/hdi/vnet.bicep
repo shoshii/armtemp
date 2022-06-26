@@ -63,6 +63,20 @@ resource networkSecurityGroupHdi 'Microsoft.Network/networkSecurityGroups@2019-1
         }
       }
       {
+        name: 'hdi-internet-outbound'
+        properties: {
+          description: 'deny access to management'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: '*'
+          destinationAddressPrefix: 'Internet'
+          access: 'Deny'
+          priority: 102
+          direction: 'Outbound'
+        }
+      }
+      {
         name: 'allowHttpsfromClient'
         properties: {
           description: 'allow Https from client'
@@ -158,9 +172,38 @@ resource defaultSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = 
   }
 }
 
+
 var storageName = format('{0}{1}stg', dnsLabelPrefix, resourceGroup().name)
 resource storageAccount 'Microsoft.Storage/storageAccounts@2021-02-01' = {
   name: storageName
+  location: location
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS'
+  }
+  dependsOn: [
+    networkInterfaceUbuntuHdiSpoke
+    networkInterfaceWinAzureSpoke
+  ]
+  properties: {
+    isHnsEnabled: false
+    networkAcls: {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+      virtualNetworkRules: [
+        {
+          action: 'Allow'
+          id: hdiSubnet.id
+          state: 'Succeeded'
+        }
+      ]
+    }
+  }
+}
+
+var storageNameGen2 = format('{0}{1}gen2', dnsLabelPrefix, resourceGroup().name)
+resource storageAccountGen2 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageNameGen2
   location: location
   kind: 'StorageV2'
   sku: {
@@ -193,9 +236,9 @@ resource userAssignedManagedId 'Microsoft.ManagedIdentity/userAssignedIdentities
   location: location
 }
 
-resource assignedToStorage 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-  name: guid(uniqueString(resourceGroup().id))
-  scope: storageAccount
+resource assignedToStorageGen2 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
+  name: guid(format('{0}{1}', uniqueString(resourceGroup().id), 'gen2'))
+  scope: storageAccountGen2
   properties: {
     //roleDefinitionId: roleDefinitionStorage.id
     roleDefinitionId: format('{0}/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b', subscription().id)
@@ -204,84 +247,6 @@ resource assignedToStorage 'Microsoft.Authorization/roleAssignments@2020-10-01-p
   }
 }
 
-/*
-resource hdi 'Microsoft.HDInsight/clusters@2018-06-01-preview' = {
-  name: clusterName
-  location: location
-  dependsOn: [
-    userAssignedManagedId
-  ]
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '/subscriptions/1a9cbb0e-b645-4768-a96a-0269c122b179/resourcegroups/rg625hdi13/providers/microsoft.managedidentity/userassignedidentities/shoshii63rg625hdi13uami': {}
-    }
-  }
-  properties: {
-    clusterVersion: '4.0'
-    osType: 'Linux'
-    tier: 'Standard'
-    clusterDefinition: {
-      kind: 'spark'
-      componentVersion: {
-        Spark: '3.1'
-      }
-      configurations: {
-        gateway: {
-          restAuthCredential: {
-            isEnabled: true
-            username: adminUserName
-            password: adminUserPassword
-          }
-        }
-      }
-    }
-    storageProfile: {
-      storageaccounts: [
-        storageAccount
-      ]
-    }
-    computeProfile: {
-      roles: [
-        {
-          name: 'headnode'
-          targetInstanceCount: 2
-          hardwareProfile: {
-            vmSize: 'standard_e4_v3'
-          }
-          osProfile: {
-            linuxOperatingSystemProfile: {
-              username: adminUserName
-              password: adminUserPassword
-            }
-          }
-          virtualNetworkProfile: {
-            id: virtualNetworkHdiSpoke.id
-            subnet: hdiSubnet.id
-          }
-        }
-        {
-          name: 'workernode'
-          targetInstanceCount: 2
-          hardwareProfile: {
-            vmSize: 'standard_e8_v3'
-          }
-          osProfile: {
-            linuxOperatingSystemProfile: {
-              username: adminUserName
-              password: adminUserPassword
-            }
-          }
-          virtualNetworkProfile: {
-            id: virtualNetworkHdiSpoke.id
-            subnet: hdiSubnet.id
-          }
-        }
-      ]
-    }
-  }
-}
-*/
 
 param adminUserName string
 @secure()
