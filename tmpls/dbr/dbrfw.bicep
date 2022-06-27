@@ -1,0 +1,573 @@
+param location string = resourceGroup().location
+
+@description('ipv4 address class B part; ex. the vnet include resources is created like 10.<nettworkAddrB>.0.0/16')
+param networkAddrB string = '191'
+
+var subnetFirewall = format('10.{0}.0', networkAddrB)
+
+var nsgName = 'common-nsg'
+
+param clientIp string
+
+// dbr params ------------------------------------------------------------------------------------------------
+@description('Specifies whether to deploy Azure Databricks workspace with secure cluster connectivity (SCC) enabled or not (No Public IP)')
+param disablePublicIp bool = true
+
+@description('The name of the network security group to create.')
+var nsgNameDbr = 'databricks-nsg'
+
+@description('The pricing tier of workspace.')
+@allowed([
+  'trial'
+  'standard'
+  'premium'
+])
+param pricingTier string = 'premium'
+
+@description('CIDR range for the private subnet.')
+param subnetCidrDbrPrivate string = format('10.{0}.0.0/18', networkAddrB)
+
+@description('The name of the private subnet to create.')
+param dbrPrivateSubnetName string = 'private-subnet'
+
+@description('CIDR range for the public subnet..')
+param subnetCidrDbrPublic string = format('10.{0}.64.0/18', networkAddrB)
+
+@description('The name of the public subnet to create.')
+param dbrPublicSubnetName string = 'public-subnet'
+
+@description('CIDR range for the vnet.')
+param vnetCidrDbr string = format('10.{0}.0.0/16', networkAddrB)
+
+@description('The name of the virtual network to create.')
+var dbrVnetName = 'databricks-vnet'
+
+@description('The name of the Azure Databricks workspace to create.')
+param workspaceName string
+
+// dbr -------------------------------------------------------------------------------
+
+var managedResourceGroupName = 'databricks-rg-${workspaceName}-${uniqueString(workspaceName, resourceGroup().id)}'
+
+resource managedResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
+  scope: subscription()
+  name: managedResourceGroupName
+}
+
+resource nsgDbr 'Microsoft.Network/networkSecurityGroups@2020-05-01' = {
+  location: location
+  name: nsgNameDbr
+  properties: {
+    securityRules: [
+      {
+        name: 'Microsoft.Databricks-workspaces_UseOnly_databricks-worker-to-worker-inbound'
+        properties: {
+          description: 'Required for worker nodes communication within a cluster.'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 100
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'Microsoft.Databricks-workspaces_UseOnly_databricks-worker-to-databricks-webapp'
+        properties: {
+          description: 'Required for workers communication with Databricks Webapp.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '443'
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'AzureDatabricks'
+          access: 'Allow'
+          priority: 100
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'Microsoft.Databricks-workspaces_UseOnly_databricks-worker-to-sql'
+        properties: {
+          description: 'Required for workers communication with Azure SQL services.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '3306'
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'Sql'
+          access: 'Allow'
+          priority: 101
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'Microsoft.Databricks-workspaces_UseOnly_databricks-worker-to-storage'
+        properties: {
+          description: 'Required for workers communication with Azure Storage services.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '443'
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'Storage'
+          access: 'Allow'
+          priority: 102
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'Microsoft.Databricks-workspaces_UseOnly_databricks-worker-to-worker-outbound'
+        properties: {
+          description: 'Required for worker nodes communication within a cluster.'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'VirtualNetwork'
+          access: 'Allow'
+          priority: 103
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'Microsoft.Databricks-workspaces_UseOnly_databricks-worker-to-eventhub'
+        properties: {
+          description: 'Required for worker communication with Azure Eventhub services.'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '9093'
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: 'EventHub'
+          access: 'Allow'
+          priority: 104
+          direction: 'Outbound'
+        }
+      }
+      {
+        name: 'allowRDPfromClient'
+        properties: {
+          description: 'allow RDP from client'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '3389'
+          sourceAddressPrefix: clientIp
+          destinationAddressPrefix: '*'
+          access: 'Allow'
+          priority: 300
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'allowSSHfromClient'
+        properties: {
+          description: 'allow SSH from client'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '22'
+          sourceAddressPrefix: clientIp
+          destinationAddressPrefix: '*'
+          access: 'Allow'
+          priority: 310
+          direction: 'Inbound'
+        }
+      }
+    ]
+  }
+}
+
+resource virtualNetworkDbrSpoke 'Microsoft.Network/virtualNetworks@2020-05-01' = {
+  location: location
+  name: dbrVnetName
+  properties: {
+    addressSpace: {
+      addressPrefixes: [
+        vnetCidrDbr
+      ]
+    }
+    dhcpOptions: {
+      dnsServers: [
+        format('{0}.4', subnetFirewall)
+      ]
+    }
+  }
+}
+
+resource dbrPublicSubnet 'Microsoft.Network/virtualNetworks/subnets@2020-05-01' = {
+  name: dbrPublicSubnetName
+  parent: virtualNetworkDbrSpoke
+  properties: {
+    addressPrefix: subnetCidrDbrPublic
+    networkSecurityGroup: {
+      id: nsgDbr.id
+    }
+    delegations: [
+      {
+        name: 'databricks-del-public'
+        properties: {
+          serviceName: 'Microsoft.Databricks/workspaces'
+        }
+      }
+    ]
+  }
+}
+
+resource dbrPrivateSubnet 'Microsoft.Network/virtualNetworks/subnets@2020-05-01' = {
+  name: dbrPrivateSubnetName
+  parent: virtualNetworkDbrSpoke
+  properties: {
+    addressPrefix: subnetCidrDbrPrivate
+    networkSecurityGroup: {
+      id: nsgDbr.id
+    }
+    delegations: [
+      {
+        name: format('databricks-del-private{0}', networkAddrB)
+        properties: {
+          serviceName: 'Microsoft.Databricks/workspaces'
+        }
+      }
+    ]
+  }
+}
+
+resource ws 'Microsoft.Databricks/workspaces@2018-04-01' = {
+  name: workspaceName
+  location: location
+  sku: {
+    name: pricingTier
+  }
+  properties: {
+    managedResourceGroupId: managedResourceGroup.id
+    parameters: {
+      customVirtualNetworkId: {
+        value: virtualNetworkDbrSpoke.id
+      }
+      customPublicSubnetName: {
+        value: dbrPublicSubnet.name
+      }
+      customPrivateSubnetName: {
+        value: dbrPrivateSubnet.name
+      }
+      enableNoPublicIp: {
+        value: disablePublicIp
+      }
+    }
+  }
+}
+
+var storageGen2Name = format('adlsgen2{0}', uniqueString(resourceGroup().id))
+resource storageGen2account 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: storageGen2Name
+  location: location
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS'
+  }
+}
+
+
+// other resources ---------------------------------------------------------------------
+resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
+  name: nsgName
+  location: location
+  properties: {
+    securityRules: [
+      {
+        name: 'allowRDPfromClient'
+        properties: {
+          description: 'allow RDP from client'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '3389'
+          sourceAddressPrefix: clientIp
+          destinationAddressPrefix: '*'
+          access: 'Allow'
+          priority: 300
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'allowSSHfromClient'
+        properties: {
+          description: 'allow SSH from client'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '22'
+          sourceAddressPrefix: clientIp
+          destinationAddressPrefix: '*'
+          access: 'Allow'
+          priority: 310
+          direction: 'Inbound'
+        }
+      }
+      {
+        name: 'allowHttpInbound'
+        properties: {
+          description: 'allow http inbound'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '80'
+          sourceAddressPrefix: '*'
+          destinationAddressPrefix: '*'
+          access: 'Allow'
+          priority: 320
+          direction: 'Inbound'
+        }
+      }
+    ]
+  }
+}
+
+
+// Azure Firewall
+
+var ipgroupNameDbrPublic = format('ipgroup-dbr-pub-{0}', uniqueString(resourceGroup().id))
+resource ipgroupDbrPublic 'Microsoft.Network/ipGroups@2021-05-01' = {
+  name: ipgroupNameDbrPublic
+  location: location
+  properties: {
+    ipAddresses: [
+      subnetCidrDbrPublic
+    ]
+  }
+}
+
+var ipgroupNameDbrPrivate = format('ipgroup-dbr-priv-{0}', uniqueString(resourceGroup().id))
+resource ipgroupDbrPrivate 'Microsoft.Network/ipGroups@2021-05-01' = {
+  name: ipgroupNameDbrPrivate
+  location: location
+  properties: {
+    ipAddresses: [
+      subnetCidrDbrPrivate
+    ]
+  }
+}
+
+//var firewallIpConfigurations = firewallIpConfigurationPrimal
+var nameFirewall = 'firewalldbr'
+var nameFirewallPolicy = format('{0}-policy', nameFirewall)
+resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = {
+  name: nameFirewallPolicy
+  location: location
+  properties: {
+    dnsSettings: {
+      enableProxy: true
+    }
+    threatIntelMode: 'Alert'
+  }
+}
+
+param metastoreFqdn string
+param extendedInfrastructureIp string
+param webappIp string
+var nwRuleCollectionGroupName = format('{0}/DefaultNetworkRuleCollectionGroup', nameFirewallPolicy)
+resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = {
+  name: nwRuleCollectionGroupName
+  dependsOn: [
+    firewallPolicy
+  ]
+  properties: {
+    priority: 200
+    ruleCollections: [
+      {
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+        action: {
+          type: 'Allow'
+        }
+        name: 'dbr-nrc'
+        priority: 220
+        rules: [
+          {
+            ruleType: 'NetworkRule'
+            name: 'webapp'
+            ipProtocols: [
+              'TCP'
+            ]
+            destinationAddresses: [
+              webappIp
+            ]
+            sourceIpGroups: [
+              ipgroupDbrPrivate.id
+              ipgroupDbrPublic.id
+            ]
+            destinationPorts: [
+              '443'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'metastore'
+            ipProtocols: [
+              'TCP'
+            ]
+            destinationAddresses: [
+              metastoreFqdn
+            ]
+            sourceIpGroups: [
+              ipgroupDbrPrivate.id
+              ipgroupDbrPublic.id
+            ]
+            destinationPorts: [
+              '3306'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'Extended infrastructure'
+            ipProtocols: [
+              'TCP'
+            ]
+            destinationAddresses: [
+              extendedInfrastructureIp
+            ]
+            sourceIpGroups: [
+              ipgroupDbrPrivate.id
+              ipgroupDbrPublic.id
+            ]
+            destinationPorts: [
+              '443'
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+param sccRelayFqdn string = 'tunnel.japaneast.azuredatabricks.net'
+param artifactBlobStoragePrimaryFqdn string
+param artifactBlobStorageSecondaryFqdn string
+param logBlobStorageFqdn string
+param eventHubEndpointFqdn string
+param dbfsEndpointFqdn string
+var appRuleCollectionGroupName = format('{0}/DefaultApplicationRuleCollectionGroup', nameFirewallPolicy)
+resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = {
+  name: appRuleCollectionGroupName
+  dependsOn: [
+    nwRuleCollectionGroup
+  ]
+  properties: {
+    priority: 300
+    ruleCollections: [
+      {
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+        action: {
+          type: 'Allow'
+        }
+        name: 'dbr-rules-arc'
+        priority: 310
+        rules: [
+          {
+            ruleType: 'ApplicationRule'
+            name: 'SCC relay'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              sccRelayFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupDbrPrivate.id
+              ipgroupDbrPublic.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'Artifact Blob Storage Primary'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              artifactBlobStoragePrimaryFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupDbrPrivate.id
+              ipgroupDbrPublic.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'Artifact Blob Storage Secondary'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              artifactBlobStorageSecondaryFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupDbrPrivate.id
+              ipgroupDbrPublic.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'Log Blob storage'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              logBlobStorageFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupDbrPrivate.id
+              ipgroupDbrPublic.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'Event Hub endpoint'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              eventHubEndpointFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupDbrPrivate.id
+              ipgroupDbrPublic.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'DBFS Storage'
+            description: 'Please replace the FQDN to precise FQDN of the DBFS Storage Account in MGR'
+            protocols: [
+              {
+                protocolType: 'Https'
+                port: 443
+              }
+            ]
+            targetFqdns: [
+              dbfsEndpointFqdn
+            ]
+            terminateTLS: false
+            sourceIpGroups: [
+              ipgroupDbrPrivate.id
+              ipgroupDbrPublic.id
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
