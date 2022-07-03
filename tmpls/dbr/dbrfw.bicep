@@ -326,14 +326,12 @@ resource virtualNetworkDbrSpoke 'Microsoft.Network/virtualNetworks@2020-05-01' =
         vnetCidrDbr
       ]
     }
-    /* needed when you use firewall 
-    https://github.com/fguerri/internet-outbound-microhack#task-4-configure-azure-firewall
+    //https://github.com/fguerri/internet-outbound-microhack#task-4-configure-azure-firewall
     dhcpOptions: {
       dnsServers: [
-        format('{0}.4', subnetFirewall)
+        ((withFirewall) ? format('{0}.4', subnetFirewall) : '168.63.129.16')
       ]
     }
-    */
   }
 }
 
@@ -377,44 +375,6 @@ resource dbrPrivateSubnet 'Microsoft.Network/virtualNetworks/subnets@2020-05-01'
     ]
   }
 }
-
-// vnet peering between hub and spoke
-/*
-resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
-  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkDbrSpoke.name)
-  dependsOn: [
-    dbrPublicSubnet
-    dbrPrivateSubnet
-    subnetAzureHubFirewall
-  ]
-  properties: {
-    allowVirtualNetworkAccess: true
-    allowForwardedTraffic: true
-    allowGatewayTransit: false
-    useRemoteGateways: false
-    remoteVirtualNetwork: {
-      id: virtualNetworkDbrSpoke.id
-    }
-  }
-}
-resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
-  name: format('{0}/peering_{1}_{2}', virtualNetworkDbrSpoke.name, virtualNetworkDbrSpoke.name, virtualNetworkAzureHub.name)
-  dependsOn: [
-    dbrPublicSubnet
-    dbrPrivateSubnet
-    subnetAzureHubFirewall
-  ]
-  properties: {
-    allowVirtualNetworkAccess: true
-    allowForwardedTraffic: true
-    allowGatewayTransit: false
-    useRemoteGateways: false
-    remoteVirtualNetwork: {
-      id: virtualNetworkAzureHub.id
-    }
-  }
-}
-*/
 
 // NAT GW for lettng DBR has public IP
 // https://docs.microsoft.com/en-us/azure/databricks/security/secure-cluster-connectivity#egress-with-vnet-injection
@@ -830,6 +790,46 @@ resource firewall 'Microsoft.Network/azureFirewalls@2021-03-01' = if (withFirewa
     ipConfigurations: firewallIpConfigurationPrimal 
     firewallPolicy: {
       id: firewallPolicy.id
+    }
+  }
+}
+
+// vnet peering between hub and spoke
+resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkDbrSpoke.name)
+  dependsOn: [
+    dbrPublicSubnet
+    dbrPrivateSubnet
+    subnetAzureHubFirewall
+  ]
+  properties: {
+    allowVirtualNetworkAccess: true
+    allowForwardedTraffic: true
+    /*
+    allowGatewayTransit: false
+    useRemoteGateways: false
+    */
+    remoteVirtualNetwork: {
+      id: virtualNetworkDbrSpoke.id
+    }
+  }
+}
+resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkDbrSpoke.name, virtualNetworkDbrSpoke.name, virtualNetworkAzureHub.name)
+  dependsOn: [
+    dbrPublicSubnet
+    dbrPrivateSubnet
+    subnetAzureHubFirewall
+  ]
+  properties: {
+    allowVirtualNetworkAccess: true
+    allowForwardedTraffic: true
+    /*
+    allowGatewayTransit: false
+    useRemoteGateways: false
+    */
+    remoteVirtualNetwork: {
+      id: virtualNetworkAzureHub.id
     }
   }
 }
