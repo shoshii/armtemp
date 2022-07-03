@@ -195,50 +195,6 @@ resource nsgDbr 'Microsoft.Network/networkSecurityGroups@2020-05-01' = {
   }
 }
 
-// vnet & subnet settings
-var vnetCidrAzureHub = format('10.{0}.0.0/16', int(networkAddrB) + 1)
-var subnetFirewall = format('10.{0}.0', int(networkAddrB) + 1)
-var subnetCidrFirewall = format('{0}.0/24', subnetFirewall)
-resource virtualNetworkAzureHub 'Microsoft.Network/virtualNetworks@2019-11-01' = {
-  name: format('{0}-{1}', 'hub-vnet', resourceGroup().name)
-  location: location
-  properties: {
-    addressSpace: {
-      addressPrefixes: [
-        vnetCidrAzureHub
-      ]
-    }
-  }
-}
-
-var subnetNameFirewall = 'AzureFirewallSubnet'
-resource subnetAzureHubFirewall 'Microsoft.Network/virtualNetworks/subnets@2021-03-01' = {
-  name: subnetNameFirewall
-  parent: virtualNetworkAzureHub
-  properties: {
-    addressPrefix: subnetCidrFirewall
-  }
-}
-
-// to be attached on SpokeSubnet
-resource routeTableSpokeFW 'Microsoft.Network/routeTables@2019-11-01' = {
-  name: 'routetable-spoke-to-fw'
-  location: location
-  properties: {
-    routes: [
-      {
-        name: format('route-{0}-spoke', networkAddrB)
-        properties: {
-          addressPrefix: '0.0.0.0/0'
-          nextHopType: 'VirtualAppliance'
-          nextHopIpAddress: format('{0}.4', subnetFirewall)
-        }
-      }
-    ]
-    disableBgpRoutePropagation: true
-  }
-}
-
 // https://docs.microsoft.com/en-us/azure/databricks/administration-guide/cloud-configurations/azure/udr
 // https://github.com/fguerri/internet-outbound-microhack#task-2-review-databricks-network-architecture-and-connectivity-requirements
 param controlPlaneNatIP string = '13.78.19.235/32'
@@ -315,7 +271,6 @@ resource routeTableSpokeInternet 'Microsoft.Network/routeTables@2019-11-01' = {
     ]
   }
 }
-
 
 resource virtualNetworkDbrSpoke 'Microsoft.Network/virtualNetworks@2020-05-01' = {
   location: location
@@ -497,7 +452,51 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2019-11-0
 
 
 
-// Azure Firewall
+// Azure Firewall and hubnet
+
+// vnet & subnet settings
+var vnetCidrAzureHub = format('10.{0}.0.0/16', int(networkAddrB) + 1)
+var subnetFirewall = format('10.{0}.0', int(networkAddrB) + 1)
+var subnetCidrFirewall = format('{0}.0/24', subnetFirewall)
+resource virtualNetworkAzureHub 'Microsoft.Network/virtualNetworks@2019-11-01' = if (withFirewall) {
+  name: format('{0}-{1}', 'hub-vnet', resourceGroup().name)
+  location: location
+  properties: {
+    addressSpace: {
+      addressPrefixes: [
+        vnetCidrAzureHub
+      ]
+    }
+  }
+}
+
+var subnetNameFirewall = 'AzureFirewallSubnet'
+resource subnetAzureHubFirewall 'Microsoft.Network/virtualNetworks/subnets@2021-03-01' = if (withFirewall) {
+  name: subnetNameFirewall
+  parent: virtualNetworkAzureHub
+  properties: {
+    addressPrefix: subnetCidrFirewall
+  }
+}
+
+// to be attached on SpokeSubnet
+resource routeTableSpokeFW 'Microsoft.Network/routeTables@2019-11-01' = if (withFirewall) {
+  name: 'routetable-spoke-to-fw'
+  location: location
+  properties: {
+    routes: [
+      {
+        name: format('route-{0}-spoke', networkAddrB)
+        properties: {
+          addressPrefix: '0.0.0.0/0'
+          nextHopType: 'VirtualAppliance'
+          nextHopIpAddress: format('{0}.4', subnetFirewall)
+        }
+      }
+    ]
+    disableBgpRoutePropagation: true
+  }
+}
 
 resource ipgroupDbrPublic 'Microsoft.Network/ipGroups@2021-05-01' = if (withFirewall) {
   name: format('ipgroup-dbr-pub-{0}', uniqueString(resourceGroup().id))
@@ -795,7 +794,7 @@ resource firewall 'Microsoft.Network/azureFirewalls@2021-03-01' = if (withFirewa
 }
 
 // vnet peering between hub and spoke
-resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = if (withFirewall) {
   name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkDbrSpoke.name)
   dependsOn: [
     dbrPublicSubnet
@@ -814,7 +813,7 @@ resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@
     }
   }
 }
-resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = if (withFirewall) {
   name: format('{0}/peering_{1}_{2}', virtualNetworkDbrSpoke.name, virtualNetworkDbrSpoke.name, virtualNetworkAzureHub.name)
   dependsOn: [
     dbrPublicSubnet
