@@ -11,6 +11,9 @@ param clientIp string
 @description('Specifies whether to deploy Azure Databricks workspace with secure cluster connectivity (SCC) enabled or not (No Public IP)')
 param disablePublicIp bool
 
+@description('Specifies whether to deploy Azure Firewall)')
+param withFirewall bool
+
 @description('The name of the network security group to create.')
 var nsgNameDbr = 'databricks-nsg'
 
@@ -236,13 +239,16 @@ resource routeTableSpokeFW 'Microsoft.Network/routeTables@2019-11-01' = {
   }
 }
 
+// https://docs.microsoft.com/en-us/azure/databricks/administration-guide/cloud-configurations/azure/udr
+// https://github.com/fguerri/internet-outbound-microhack#task-2-review-databricks-network-architecture-and-connectivity-requirements
 param controlPlaneNatIP string = '13.78.19.235/32'
 param sccRelayIP string = '20.46.121.76/32'
 param metastoreIP string = '40.79.192.23/32'
+/*
 param artifactBlobStoragePrimaryIP string = '20.38.116.36/32'
 param logBlobStorageIP string = '20.150.85.4/32'
 param dbfsEndpointIP string = '0.0.0.0/0'
-
+*/
 resource routeTableSpokeInternet 'Microsoft.Network/routeTables@2019-11-01' = {
   name: 'routetable-spoke-to-internet'
   location: location
@@ -372,6 +378,44 @@ resource dbrPrivateSubnet 'Microsoft.Network/virtualNetworks/subnets@2020-05-01'
   }
 }
 
+// vnet peering between hub and spoke
+/*
+resource peeringSpoke 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkAzureHub.name, virtualNetworkAzureHub.name, virtualNetworkDbrSpoke.name)
+  dependsOn: [
+    dbrPublicSubnet
+    dbrPrivateSubnet
+    subnetAzureHubFirewall
+  ]
+  properties: {
+    allowVirtualNetworkAccess: true
+    allowForwardedTraffic: true
+    allowGatewayTransit: false
+    useRemoteGateways: false
+    remoteVirtualNetwork: {
+      id: virtualNetworkDbrSpoke.id
+    }
+  }
+}
+resource peeringHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2020-07-01' = {
+  name: format('{0}/peering_{1}_{2}', virtualNetworkDbrSpoke.name, virtualNetworkDbrSpoke.name, virtualNetworkAzureHub.name)
+  dependsOn: [
+    dbrPublicSubnet
+    dbrPrivateSubnet
+    subnetAzureHubFirewall
+  ]
+  properties: {
+    allowVirtualNetworkAccess: true
+    allowForwardedTraffic: true
+    allowGatewayTransit: false
+    useRemoteGateways: false
+    remoteVirtualNetwork: {
+      id: virtualNetworkAzureHub.id
+    }
+  }
+}
+*/
+
 // NAT GW for lettng DBR has public IP
 // https://docs.microsoft.com/en-us/azure/databricks/security/secure-cluster-connectivity#egress-with-vnet-injection
 resource publicIpPrefixes 'Microsoft.Network/publicIPPrefixes@2021-03-01' = {
@@ -467,6 +511,7 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2019-11-0
           destinationPortRange: '22'
           sourceAddressPrefix: clientIp
           destinationAddressPrefix: '*'
+        
           access: 'Allow'
           priority: 310
           direction: 'Inbound'
@@ -491,11 +536,11 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2019-11-0
 }
 
 
+
 // Azure Firewall
 
-var ipgroupNameDbrPublic = format('ipgroup-dbr-pub-{0}', uniqueString(resourceGroup().id))
-resource ipgroupDbrPublic 'Microsoft.Network/ipGroups@2021-05-01' = {
-  name: ipgroupNameDbrPublic
+resource ipgroupDbrPublic 'Microsoft.Network/ipGroups@2021-05-01' = if (withFirewall) {
+  name: format('ipgroup-dbr-pub-{0}', uniqueString(resourceGroup().id))
   location: location
   properties: {
     ipAddresses: [
@@ -504,9 +549,8 @@ resource ipgroupDbrPublic 'Microsoft.Network/ipGroups@2021-05-01' = {
   }
 }
 
-var ipgroupNameDbrPrivate = format('ipgroup-dbr-priv-{0}', uniqueString(resourceGroup().id))
-resource ipgroupDbrPrivate 'Microsoft.Network/ipGroups@2021-05-01' = {
-  name: ipgroupNameDbrPrivate
+resource ipgroupDbrPrivate 'Microsoft.Network/ipGroups@2021-05-01' = if (withFirewall) {
+  name:  format('ipgroup-dbr-priv-{0}', uniqueString(resourceGroup().id))
   location: location
   properties: {
     ipAddresses: [
@@ -516,9 +560,9 @@ resource ipgroupDbrPrivate 'Microsoft.Network/ipGroups@2021-05-01' = {
 }
 
 //var firewallIpConfigurations = firewallIpConfigurationPrimal
-var nameFirewall = 'firewalldbr'
-var nameFirewallPolicy = format('{0}-policy-{1}', nameFirewall, resourceGroup().name)
-resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = {
+var nameFirewall = format('firewall-dbr-{0}', resourceGroup().name)
+var nameFirewallPolicy = format('{0}-policy', nameFirewall)
+resource firewallPolicy 'Microsoft.Network/firewallPolicies@2021-05-01' = if (withFirewall) {
   name: nameFirewallPolicy
   location: location
   properties: {
@@ -533,7 +577,7 @@ param metastoreFqdn string
 param extendedInfrastructureIp string
 param webappIp string
 var nwRuleCollectionGroupName = format('{0}/DefaultNetworkRuleCollectionGroup', nameFirewallPolicy)
-resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = {
+resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = if (withFirewall) {
   name: nwRuleCollectionGroupName
   dependsOn: [
     firewallPolicy
@@ -606,14 +650,14 @@ resource nwRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectio
   }
 }
 
-param sccRelayFqdn string = 'tunnel.japaneast.azuredatabricks.net'
+param sccRelayFqdn string
 param artifactBlobStoragePrimaryFqdn string
 param artifactBlobStorageSecondaryFqdn string
 param logBlobStorageFqdn string
 param eventHubEndpointFqdn string
 param dbfsEndpointFqdn string
 var appRuleCollectionGroupName = format('{0}/DefaultApplicationRuleCollectionGroup', nameFirewallPolicy)
-resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = {
+resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2021-05-01' = if (withFirewall) {
   name: appRuleCollectionGroupName
   dependsOn: [
     nwRuleCollectionGroup
@@ -741,5 +785,51 @@ resource appRuleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollecti
         ]
       }
     ]
+  }
+}
+
+
+resource publicIPAddressHubFirewall 'Microsoft.Network/publicIPAddresses@2021-03-01' = if (withFirewall) {
+  name: format('hub-firewall-pip-{0}', resourceGroup().name)
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    publicIPAllocationMethod: 'Static'
+    publicIPAddressVersion: 'IPv4'
+    dnsSettings: {
+      domainNameLabel: format('hub-firewall-pip-{0}', resourceGroup().name)
+    }
+  }
+}
+
+var firewallIpConfigurationPrimal = array({
+  name: format('ipconfigfirewall{0}{1}', networkAddrB, 0)
+  properties: {
+    subnet: {
+      id: subnetAzureHubFirewall.id
+    }
+    publicIPAddress: {
+      id: publicIPAddressHubFirewall.id
+    }
+  }
+})
+
+resource firewall 'Microsoft.Network/azureFirewalls@2021-03-01' = if (withFirewall) {
+  name: nameFirewall
+  location: location
+  dependsOn: [
+    virtualNetworkAzureHub
+    ipgroupDbrPrivate
+    ipgroupDbrPublic
+    nwRuleCollectionGroup
+    appRuleCollectionGroup
+  ]
+  properties: {
+    ipConfigurations: firewallIpConfigurationPrimal 
+    firewallPolicy: {
+      id: firewallPolicy.id
+    }
   }
 }
