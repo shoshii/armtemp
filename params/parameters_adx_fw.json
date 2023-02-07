@@ -1,0 +1,50 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "clientIp": {
+            "reference": {
+                "keyVault": {
+                    "id": "/subscriptions/<your subscription id>/resourceGroups/rg-keyvault/providers/Microsoft.KeyVault/vaults/shogohoshiikeyvault"
+                },
+                "secretName": "clientIp"
+            }
+        },
+        "dnsLabelPrefix": {
+            "value": "shoshiiadx"
+        },
+        "monitorIps": {
+            "value": [
+                "40.79.195.2/32",
+                "40.115.138.201/32",
+                "40.115.140.98/32",
+                "40.115.141.134/32",
+                "40.115.142.61/32",
+                "40.115.137.9/32",
+                "40.115.137.124/32",
+                "40.115.137.189/32",
+                "40.115.140.218/32",
+                "52.163.244.128/32",
+                "104.46.217.37/32"
+            ]
+        },
+        "managementIps": {
+            "value": [
+                "20.43.89.90/32"
+            ]
+        },
+        "certificatioAuthOutboundFqdns": {
+            "value": [
+                "ocsp.msocsp.com",
+                "ocsp.digicert.com",
+                "crl3.digicert.com",
+                "crl.microsoft.com",
+                "www.microsoft.com",
+                "go.microsoft.com",
+                "dmd.metaservices.microsoft.com",
+                "www.msftconnecttest.com",
+                "adl.windows.com"
+            ]
+        }
+    }
+  }

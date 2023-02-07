@@ -1,0 +1,211 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2014-04-01-preview/deploymentTemplate.json#",
+    "contentVersion": "0.9.0.0",
+    "parameters": {
+        "baseTime": {
+            "type": "string",
+            "defaultValue": "[utcNow('u')]"
+        },
+        "networkAddrB": {
+            "type": "string",
+            "defaultValue": "192",
+            "metadata": {
+                "description": "xxx.<networkAddrB>.xxx.xxx"
+            }
+        },
+        "userPrefix": {
+            "type": "string",
+            "defaultValue": "shoshii"
+        },
+        "clusterName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the HDInsight cluster to create."
+            }
+        },
+        "clusterLoginUserName": {
+            "type": "string",
+            "defaultValue": "admin",
+            "metadata": {
+                "description": "These credentials can be used to submit jobs to the cluster and to log into cluster dashboards."
+            }
+        },
+        "clusterLoginPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The password must be at least 10 characters in length and must contain at least one digit, one non-alphanumeric character, and one upper or lower case letter."
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "japaneast",
+            "metadata": {
+                "description": "The location where all azure resources will be deployed."
+            }
+        },
+        "clusterVersion": {
+            "type": "string",
+            "defaultValue": "4.0",
+            "metadata": {
+                "description": "HDInsight cluster version."
+            }
+        },
+        "clusterWorkerNodeCount": {
+            "type": "int",
+            "defaultValue": 2,
+            "metadata": {
+                "description": "The number of nodes in the HDInsight cluster."
+            }
+        },
+        "clusterKind": {
+            "type": "string",
+            "defaultValue": "SPARK",
+            "metadata": {
+                "description": "The type of the HDInsight cluster to create."
+            }
+        },
+        "sshUserName": {
+            "type": "string",
+            "defaultValue": "sshuser",
+            "metadata": {
+                "description": "These credentials can be used to remotely access the cluster."
+            }
+        },
+        "sshPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The password must be at least 10 characters in length and must contain at least one digit, one non-alphanumeric character, and one upper or lower case letter."
+            }
+        },
+        "minTlsVersionNumber": {
+            "type": "string",
+            "defaultValue": "1.2"
+        }
+    },
+    "variables": {
+        "primaryStorageAccountName": "[concat(parameters('userPrefix'), resourceGroup().name, 'stg')]",
+        "managedIdResourceId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', concat(parameters('userPrefix'), resourceGroup().name, 'uami'))]",
+        "virtualNetworkResourceId": "[resourceId('Microsoft.Network/virtualNetworks', 'hdi-vnet')]",
+        "subnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'hdi-vnet', 'hdi-subnet')]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2015-03-01-preview",
+            "name": "[parameters('clusterName')]",
+            "type": "Microsoft.HDInsight/clusters",
+            "location": "[parameters('location')]",
+            "dependsOn": [],
+            "tags": {},
+            "zones": null,
+            "properties": {
+                "clusterVersion": "[parameters('clusterVersion')]",
+                "osType": "Linux",
+                "tier": "standard",
+                "clusterDefinition": {
+                    "kind": "[parameters('clusterKind')]",
+                    "componentVersion": {
+                        "Spark": "3.1"
+                    },
+                    "configurations": {
+                        "gateway": {
+                            "restAuthCredential.isEnabled": true,
+                            "restAuthCredential.username": "[parameters('clusterLoginUserName')]",
+                            "restAuthCredential.password": "[parameters('clusterLoginPassword')]"
+                        }
+                    }
+                },
+                "storageProfile": {
+                    "storageaccounts": [
+                        {
+                            "name": "[replace(replace(concat(reference(resourceId('Microsoft.Storage/storageAccounts/', variables('primaryStorageAccountName')), '2021-02-01').primaryEndpoints.dfs),'https:',''),'/','')]",
+                            "isDefault": true,
+                            "fileSystem": "[replace(replace(toLower(concat(parameters('clusterName'), '-', parameters('baseTime'))), ' ', '-'), ':', '-')]",
+                            "resourceId": "[resourceId('Microsoft.Storage/storageAccounts', variables('primaryStorageAccountName'))]",
+                            "msiResourceId": "[variables('managedIdResourceId')]"
+                        }
+                    ]
+                },
+                "computeProfile": {
+                    "roles": [
+                        {
+                            "autoscale": null,
+                            "name": "headnode",
+                            "minInstanceCount": 1,
+                            "targetInstanceCount": 2,
+                            "hardwareProfile": {
+                                "vmSize": "Standard_E8_V3"
+                            },
+                            "osProfile": {
+                                "linuxOperatingSystemProfile": {
+                                    "username": "[parameters('sshUserName')]",
+                                    "password": "[parameters('sshPassword')]"
+                                },
+                                "windowsOperatingSystemProfile": null
+                            },
+                            "virtualNetworkProfile": {
+                                "id": "[variables('virtualNetworkResourceId')]",
+                                "subnet": "[variables('subnetResourceId')]"
+                            },
+                            "scriptActions": [],
+                            "dataDisksGroups": null
+                        },
+                        {
+                            "autoscale": null,
+                            "name": "workernode",
+                            "targetInstanceCount": 2,
+                            "hardwareProfile": {
+                                "vmSize": "Standard_A5"
+                            },
+                            "osProfile": {
+                                "linuxOperatingSystemProfile": {
+                                    "username": "[parameters('sshUserName')]",
+                                    "password": "[parameters('sshPassword')]"
+                                },
+                                "windowsOperatingSystemProfile": null
+                            },
+                            "virtualNetworkProfile": {
+                                "id": "[variables('virtualNetworkResourceId')]",
+                                "subnet": "[variables('subnetResourceId')]"
+                            },
+                            "scriptActions": [],
+                            "dataDisksGroups": null
+                        },
+                        {
+                            "autoscale": null,
+                            "name": "zookeepernode",
+                            "minInstanceCount": 1,
+                            "targetInstanceCount": 3,
+                            "hardwareProfile": {
+                                "vmSize": "Standard_A2_V2"
+                            },
+                            "osProfile": {
+                                "linuxOperatingSystemProfile": {
+                                    "username": "[parameters('sshUserName')]",
+                                    "password": "[parameters('sshPassword')]"
+                                },
+                                "windowsOperatingSystemProfile": null
+                            },
+                            "virtualNetworkProfile": {
+                                "id": "[variables('virtualNetworkResourceId')]",
+                                "subnet": "[variables('subnetResourceId')]"
+                            },
+                            "scriptActions": [],
+                            "dataDisksGroups": null
+                        }
+                    ]
+                },
+                "networkProperties": {
+                    "resourceProviderConnection": "Outbound",
+                    "privateLink": "Enabled"
+                },
+                "minSupportedTlsVersion": "[parameters('minTlsVersionNumber')]"
+            },
+            "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                    "[variables('managedIdResourceId')]": {}
+                }
+            }
+        }
+    ]
+}
