@@ -15,14 +15,6 @@
                 },
                 "secretName": "adminUserPassword"
             }
-        },
-        "clientIp": {
-            "reference": {
-                "keyVault": {
-                    "id": "/subscriptions/<your subscription id>/resourceGroups/rg-keyvault/providers/Microsoft.KeyVault/vaults/shogohoshiikeyvault"
-                },
-                "secretName": "clientIp"
-            }
         }
     }
 }
