@@ -41,6 +41,14 @@ $ az group delete --resource-group <リソースグループ名>
 
 ### ADX クラスター依存関係取得
 
+#### armclient インストール
+
+PowerShell を管理者権限で起動
+
+```
+$ choco install armclient
+```
+
 ```
 $ Set-ExecutionPolicy Unrestricted -Scope Process
 $ misc/get_adx_dependencies.ps1 <subscription id> <adx cluster name> <resource group name>
